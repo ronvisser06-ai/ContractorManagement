@@ -38,3 +38,11 @@ Thumbs.db
 
 # Redundant copy of the coaching files (delete after repo init)
 Jacques CodeCoach/
+
+# Python extractor service
+python-extractor/__pycache__/
+python-extractor/.pytest_cache/
+python-extractor/.venv/
+
+# Real deck dropped in for Step 3 testing — not for the repo
+SampleOrientation/

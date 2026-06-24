@@ -299,6 +299,41 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Same conversation as the issue report — fresh conversation for Step 3.
 
+### Session 2026-06-24 — Feature 2, Step 3 — Real Python Extractor (the flagged friction step)
+
+**What I Built**:
+- **Hosting decision (ExecutionPlan.md §6 decision #5):** a standalone Python service (`python-extractor/`) deployed as its own Vercel project, not mixed into the Next.js app — avoids re-fighting Vercel's Root Directory detection (already painful once for `web`) and keeps the polyglot seam as small as ExecutionPlan.md §2 intends. The Inngest workflow calls it over HTTP with a shared-secret bearer token; locally it runs via `uvicorn`. Creating the actual second Vercel project (dashboard step, Root Directory = `python-extractor`) is still on Ron, same as the original `web` project setup.
+- Migration `0005_green_bromley.sql`: nullable `source_asset` jsonb column on `generation_jobs` (drizzle-kit generated from a `schema.ts` change, applied via `db:migrate`).
+- Deck upload: `createJob` (`web/src/app/app/jobs/actions.ts`) now accepts a `.pptx`/`.pdf` file, validates by extension (not the browser-reported MIME, which is unreliable across OSes), sha256-hashes it, uploads via the admin client to `pipeline-artifacts` under `sites/{siteId}/jobs/{jobId}/source/{filename}`, and writes `source_asset` onto the job row at insert time. `idempotency_key` switched from a per-job stub to `{siteId}:sha256:{sha256}` (contracts §2's own example shape) so resubmitting the same deck for a site dedupes instead of spawning a duplicate job. `next.config.ts` server-actions body limit raised to 25mb (default 1mb is too small for a real deck). `sites/page.tsx` got a file input on the "Start generation" form.
+- `python-extractor/`: FastAPI app (`app.py`) with one `/extract` endpoint, bearer-auth gated. `extract_pptx.py` and `extract_pdf.py` produce `ExtractedDeck` per contracts §4.1 — slides normalized from both source types into the same shape, text runs (one per non-empty paragraph, with `level`/`bold`), tables, speaker notes (pptx only), and image/media assets. Group shapes are flattened recursively. A video or picture whose relationship `target_mode` is External (points outside the package) is recorded `embed_state: "linked_missing"` with a `MEDIA_LINK_UNRESOLVED` warning instead of failing the job; embedded assets are uploaded straight to the same `pipeline-artifacts` bucket by the Python service itself (needs its own `SUPABASE_SERVICE_ROLE_KEY`) so the `ExtractedDeck` JSON never carries binary payloads inline. Best-effort theme read for `branding` (colors/fonts from the slide master's theme XML) — null when not confidently found, not a failure.
+- `run-generation-job.ts`: the `extracting` stage is no longer stubbed. It reads the job's `source_asset`, creates a 5-minute signed URL for it, and POSTs `{ signed_url, source_type, job_id, site_id }` (never the file bytes) to the extractor; the real `ExtractedDeck` response is wrapped in the same stage-envelope pattern as the other artifacts and stored as `extracted_deck`. `structuring`/`generating_quiz`/`qa_review` are untouched, still stubbed.
+- Tests (`python-extractor/test_extract.py`): a synthetic fixture (built with `python-pptx` itself, including a real *external* relationship via `part.relate_to(..., is_external=True)`) proves tables, speaker notes, and a linked-missing video surface correctly — the brief's explicit ask — since no real deck was on hand yet when this was first scoped. A PDF smoke test confirms that path doesn't crash either.
+
+**What Went Wrong**:
+- Ron dropped a real 63-slide deck (`SampleOrientation/2025 Proton Safety Orientation_V2.0_Draft (1).pptx`, 8.8MB) into the repo mid-session — used it instead of relying solely on the synthetic fixture, and gitignored the folder (real customer content, not for the repo).
+- That real deck caught an actual bug the synthetic fixture couldn't have: 3 of its 45 images are modern Office vector icons referenced via an `<a16:svgBlip>`/`<asvg:svgBlip>` extension on the blip, not the classic `r:embed` attribute `shape.image` reads. First pass misclassified all 3 as `linked_missing` (wrong — they're fully embedded, just referenced differently). Fixed by falling back to a generic scan for any `r:embed`/`r:link` anywhere under the shape before concluding a picture is genuinely linked-and-missing. Re-ran against the real deck: 45/45 correctly `embedded`, 0 false-positive warnings.
+- `_branding()`'s first draft called `.element` on the theme part — `part_related_by` returns a generic `opc.package.Part`, not an XML-aware part, so that attribute doesn't exist. Fixed by parsing `theme_part.blob` directly with `lxml.etree.fromstring`.
+- First live e2e attempt timed out: the script's 60s deadline was too short for a real 45-asset deck (Python uploads each asset to Storage sequentially), and the timeout's cleanup path deleted the job row out from under a still-running Inngest step. Re-ran with a 5-minute deadline — the real run actually completed in ~73s end-to-end; no code changes needed, just a more realistic test timeout.
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint` (web), `npm run build` all clean. `python-extractor/test_extract.py` — 3/3 pass.
+- Live end-to-end against the real deck: started `next dev` (Ron's own, already running from the prior session) + `npx inngest-cli dev` + `uvicorn app:app`, uploaded the real `.pptx` to Storage exactly as `createJob` would, fired the job, and watched it walk every state to `awaiting_approval`. Downloaded the resulting `extracted_deck` artifact mid-run and asserted `produced_by.stage_impl_version == "extracting@real-0.1"` (not a stub), 63 slides, 45 assets, 0 warnings.
+- `npm test` → 12/12 pass (unaffected, regression net still green).
+
+**What's Next**:
+- **Step 4 — Fixed renderer** for the closed block-type set (contracts §4.3), rendering the canned content model from the still-stubbed structuring stage.
+- Carried forward: actually create the second Vercel project for `python-extractor/` (Root Directory = `python-extractor`) when ready to deploy past local dev.
+
+**Rules Followed**:
+- ✓ Read `Feature2-Pipeline-Skeleton-Brief.md` Step 3 + working agreement, contracts §2/§4.1, and ExecutionPlan.md §6 decision #5 before building (Rules 1, 2)
+- ✓ One step only — structure/quiz/QA stay stubbed (working agreement: steps are never bundled)
+- ✓ Hosting decision made deliberately and flagged, not just defaulted (Rule 12: architectural changes get flagged)
+- ✓ Tested against a real deck, not just a synthetic one, once available — and the synthetic fixture still covers what the real deck didn't exercise (Rule 7)
+- ✓ TypeScript strict, lint, and build all clean; Python tests green; proven with a live end-to-end run against real content
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Single conversation, friction step as flagged — fresh conversation before Step 4.
+
 ---
 
 ## Track Progress

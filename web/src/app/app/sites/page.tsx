@@ -71,8 +71,15 @@ export default async function SitesPage({ searchParams }: Props) {
             >
               <p className="font-medium">{site.name}</p>
               {canStartGeneration && (
-                <form action={createJob}>
+                <form action={createJob} className="flex items-center gap-2">
                   <input type="hidden" name="site_id" value={site.id} />
+                  <input
+                    type="file"
+                    name="deck"
+                    accept=".pptx,.pdf"
+                    required
+                    className="text-sm text-muted-foreground file:mr-2 file:rounded-md file:border file:bg-background file:px-2 file:py-1 file:text-xs file:font-medium"
+                  />
                   <Button type="submit" variant="outline" size="sm">
                     Start generation
                   </Button>

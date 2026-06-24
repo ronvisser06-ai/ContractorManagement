@@ -136,6 +136,10 @@ export const generationJobs = pgTable(
     maxRework: integer('max_rework').notNull().default(3),
     qaFlagged: boolean('qa_flagged').notNull().default(false),
     packageId: text('package_id'), // FK orientation_packages; table doesn't exist until Step 5
+    // Step 3: the uploaded deck (contracts §2 SourceAsset). Nullable at the column
+    // level only so existing rows from Steps 1-2 testing don't break; every job
+    // created going forward populates it at insert time.
+    sourceAsset: jsonb('source_asset'),
     artifacts: jsonb('artifacts').notNull().default({}),
     qaHistory: jsonb('qa_history').notNull().default([]),
     telemetry: jsonb('telemetry').notNull().default({}),
