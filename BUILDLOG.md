@@ -254,6 +254,37 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Same conversation — fresh conversation before Step 2.
 
+### Session 2026-06-24 — Feature 2, Step 2 — State Machine + Realtime Tracker (All Stages Stubbed)
+
+**What I Built**:
+- Migration `0004_generation_jobs_step2_setup.sql`: broadened `generation_jobs` write RLS to `client_admin OR content_developer` (the Step 2 brief names both roles as able to trigger a job; `content_developer` isn't grantable yet — no invite flow until M1); enabled Supabase Realtime on `generation_jobs` for the tracker UI; created the private `pipeline-artifacts` Storage bucket (service-role only — no public access or object policies needed).
+- `src/lib/inngest/functions/run-generation-job.ts`: the durable Inngest workflow (`runGenerationJob`) walking a job through `queued → extracting → structuring → generating_quiz → qa_review → awaiting_approval` (contracts §1). Each working stage (`extracting`/`structuring`/`generating_quiz`) is a stub: writes a canned envelope (`kind: "code"`, `stage_impl_version` `@stub-0.1`) to the `pipeline-artifacts` bucket and records the `ArtifactRef` (storage key + sha256 + produced_at) onto the job's `artifacts` jsonb. `qa_review` always passes (stub) and appends a `QAHistoryEntry`; the rework-loop columns exist but aren't exercised yet.
+- `src/lib/inngest/events.ts`: the `generation/job.start` event type (`jobId`, `siteId`, `orgId`), wired into `api/inngest/route.ts`'s function list alongside `hello-world`.
+- `src/app/app/jobs/actions.ts`: `createJob` server action — re-derives `org_id` from the caller's own membership (never trusts client input), confirms the target site belongs to that org, inserts the job row, then sends the Inngest event.
+- `src/app/app/jobs/[jobId]/page.tsx` + `job-tracker.tsx`: the realtime stage tracker — subscribes to `postgres_changes` on the job's row, renders stage progress, artifacts, qa_history, and any error live.
+- `src/lib/supabase/admin.ts`: service-role client for the Inngest workflow (durable steps can run well after the triggering request ends; bypasses RLS, server-only).
+- `app/sites/page.tsx`: added a "Start generation" button per site, gated to `client_admin`/`content_developer` to mirror the RLS policy.
+- Simplified `generation-jobs-isolation.test.mts`: dropped the manual `content_developer` role grant now that `client_admin` alone is sufficient to write a job under the broadened policy.
+
+**What Went Wrong**:
+- The session that wrote this code was interrupted before the final test + commit. Picked back up in a fresh, verification-only session: confirmed via direct DB queries (`pg_policy`, `pg_publication_tables`, `storage.buckets`, `drizzle.__drizzle_migrations`) that migration `0004` was already applied live even though the SQL file and code were still uncommitted — nothing was lost, just unrecorded in git.
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint`, `npm run build` all clean.
+- `npm test` → 12/12 pass.
+- Live end-to-end: started `next dev` + `npx inngest-cli dev`, provisioned a throwaway tenant/org/site, fired `generation/job.start`, and polled the job row live — walked `queued → extracting → structuring → generating_quiz → qa_review → awaiting_approval`, each stage landing a real stored artifact (sha256 + storage key) plus a `qa_history` pass entry. Cleaned up the test tenant afterward.
+
+**What's Next**:
+- **Step 3 — Real Python extractor**: replace the stubbed `extracting` stage with a real `python-pptx`/PDF function producing an `ExtractedDeck` (contracts §4.1); decide hosting (Vercel Python fn vs. a separate service).
+
+**Rules Followed**:
+- ✓ One step only — structure/quiz/QA stay stubbed, no real extractor yet (working agreement: steps are never bundled)
+- ✓ RLS broadened deliberately and re-verified by the isolation test, not just assumed
+- ✓ TypeScript strict, lint, and build all clean; proven with a live end-to-end run, not just unit tests
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Verification + commit done in a fresh conversation after the interrupted session; fresh conversation before Step 3.
+
 ---
 
 ## Track Progress

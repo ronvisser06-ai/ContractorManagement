@@ -58,14 +58,9 @@ async function provisionTenant(label: 'a' | 'b'): Promise<Tenant> {
   })
   if (orgErr) throw new Error(`create_organization failed for ${email}: ${orgErr.message}`)
 
-  // create_organization only grants client_admin; generation_jobs writes require
-  // content_developer (HowDesign-DataModel.md §4.1), so add it via the service role
-  // — there's no invite flow yet that can grant this through the app.
-  const { error: roleErr } = await admin
-    .from('org_memberships')
-    .update({ roles: ['client_admin', 'content_developer'] })
-    .eq('id', membershipId)
-  if (roleErr) throw new Error(`role grant failed for ${email}: ${roleErr.message}`)
+  // create_organization grants client_admin, which is enough on its own to write
+  // generation_jobs (Step 2 setup migration broadened the policy to client_admin
+  // OR content_developer — content_developer isn't grantable yet, no invite flow).
 
   const siteId = `site_${ulid()}`
   const { error: siteErr } = await client

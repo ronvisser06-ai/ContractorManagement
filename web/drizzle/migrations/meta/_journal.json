@@ -29,6 +29,13 @@
       "when": 1782328949698,
       "tag": "0003_legal_photon",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782328949699,
+      "tag": "0004_generation_jobs_step2_setup",
+      "breakpoints": true
     }
   ]
 }

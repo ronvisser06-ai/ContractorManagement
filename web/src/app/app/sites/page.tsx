@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createSite } from './actions'
+import { createJob } from '@/app/app/jobs/actions'
 
 interface Props {
   searchParams: Promise<{ error?: string }>
@@ -26,7 +27,10 @@ export default async function SitesPage({ searchParams }: Props) {
 
   if (!membership) redirect('/onboarding/create-org')
 
-  const isClientAdmin = (membership.roles as string[]).includes('client_admin')
+  const roles = membership.roles as string[]
+  const isClientAdmin = roles.includes('client_admin')
+  // Matches the "generation_jobs: write if client_admin or content_developer" RLS policy.
+  const canStartGeneration = roles.includes('client_admin') || roles.includes('content_developer')
 
   // RLS ("sites: read if org member") already scopes this to the caller's org;
   // the explicit eq() keeps the query correct if a user ever belongs to >1 org.
@@ -61,8 +65,19 @@ export default async function SitesPage({ searchParams }: Props) {
       <ul className="space-y-2">
         {sites && sites.length > 0 ? (
           sites.map((site) => (
-            <li key={site.id} className="rounded-lg border bg-card px-4 py-3">
+            <li
+              key={site.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3"
+            >
               <p className="font-medium">{site.name}</p>
+              {canStartGeneration && (
+                <form action={createJob}>
+                  <input type="hidden" name="site_id" value={site.id} />
+                  <Button type="submit" variant="outline" size="sm">
+                    Start generation
+                  </Button>
+                </form>
+              )}
             </li>
           ))
         ) : (
