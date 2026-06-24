@@ -224,6 +224,36 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Same conversation — fresh conversation before Feature 2.
 
+### Session 2026-06-24 — Feature 2, Step 1 — Jobs Table + Shared Contract Types + Inngest Stood Up
+
+**What I Built**:
+- Migration `0003_legal_photon.sql`: `generation_jobs` table per `orientation_pipeline_contracts_v0.1.md` §2 / `HowDesign-DataModel.md` §3.2 — flat indexable columns (`id`, `org_id`, `site_id`, `status`, `current_stage`, `rework_count`, `max_rework`, `qa_flagged`, `package_id`, `created_by`, timestamps, `idempotency_key`, unique) plus `jsonb` for `artifacts`/`qa_history`/`telemetry`/`error`. New `job_status` enum (the 10 states from contracts §1); `current_stage` reuses it so a `failed` job still records which working stage to re-enter on retry. RLS: org-scoped read for any member, write gated to `content_developer` (§4.1) — same pattern as `sites`. `source_asset`/`package_version`/`approved_by`/`approved_at` from the contract are deliberately deferred to the steps that actually need them (Step 3 upload, Step 5 publish) rather than added speculatively now.
+- `src/test/generation-jobs-isolation.test.mts`: same regression-net pattern as the Feature 1 isolation test — two tenants, each granted `content_developer` via the service role (no invite flow exists yet to grant it through the app), each creates a job; asserts neither can read, list, update, or write into the other's org's job.
+- `src/contracts/types.ts`: the shared TS types from contracts §5 (`JobStatus`, `JobRecord`, `BlockType`, `ContentBlock`, `HazardBlock`, `QuizQuestion`, `QAIssue`, `QAVerdict`, etc.) as the one module the rest of the app imports from instead of redeclaring these shapes. §5 references `SourceAsset`/`QAHistoryEntry`/`JobError` without defining them inline — backfilled their shapes from the §2 JSON example. Wired a real consumer immediately: `db/schema.ts`'s `jobStatusEnum` is declared `satisfies readonly [JobStatus, ...JobStatus[]]`, so the DB enum and the contract type can't silently drift (verified by deliberately injecting a bad value and watching `tsc` reject it).
+- Inngest stood up: `inngest` package, `src/lib/inngest/client.ts`, `src/app/api/inngest/route.ts` (App Router `serve()`), and one `hello-world` function (`src/lib/inngest/functions/hello.ts`) triggered by a `test/hello.world` event. `INNGEST_DEV=1` added to `.env.local` (cloud mode otherwise demands a signing key).
+
+**What Went Wrong**:
+- The Dropbox-sync `.next` file-lock (flagged as a carried-forward item in `Feature2-Pipeline-Skeleton-Brief.md`, and the second time it's hit) recurred again on a dev-server restart. Fixed for real this time instead of just deleting `.next` again: set the `com.dropbox.ignored` NTFS alternate-data-stream attribute on `web/.next` (`Set-Content -Stream com.dropbox.ignored -Value 1`), which tells the Dropbox client to stop syncing/locking that folder. Shouldn't recur.
+- First hit on `/api/inngest` 500'd with "no signing key found" — Inngest defaults to cloud mode. Fixed by setting `INNGEST_DEV=1` in `.env.local`.
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint`, `npm run build` all clean.
+- `npm test` → 12/12 pass (5 new generation_jobs assertions + the 7 from Feature 1); confirmed zero leftover seeded rows/users afterward.
+- Local Inngest dev server (`npx inngest-cli dev`) auto-discovered the app, and a `test/hello.world` event POSTed to it ran the `hello-world` function to `"status":"Completed"`.
+- Confirmed a job row can be created and is RLS-scoped (both directly and via the automated test).
+
+**What's Next**:
+- **Step 2 — State machine + realtime tracker (all stages stubbed, incl. a placeholder extract)**: the Inngest durable workflow implementing contracts §1's transitions, a "create job" trigger for a site, and a Supabase-Realtime stage tracker UI showing a job advance to `awaiting_approval`.
+
+**Rules Followed**:
+- ✓ Read `Feature2-Pipeline-Skeleton-Brief.md` (Step 1 + working agreement), contracts §2/§5, and `HowDesign-DataModel.md` before building (Rules 1, 2)
+- ✓ One step only — no state machine, no stages, no UI (working agreement: steps are never bundled)
+- ✓ RLS shipped in the same migration as the table; automated isolation test added, not just a manual check
+- ✓ TypeScript strict, lint, and build all clean; Inngest verified running locally, not just installed
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Same conversation — fresh conversation before Step 2.
+
 ---
 
 ## Track Progress

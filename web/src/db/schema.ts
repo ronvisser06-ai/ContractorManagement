@@ -1,4 +1,5 @@
 import {
+  boolean,
   integer,
   jsonb,
   pgEnum,
@@ -9,6 +10,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import { customType } from 'drizzle-orm/pg-core'
+import type { JobStatus } from '@/contracts/types'
 
 // citext is case-insensitive text; the extension is enabled in the migration
 const citext = customType<{ data: string; driverData: string }>({
@@ -36,6 +38,24 @@ export const membershipStatusEnum = pgEnum('membership_status', [
   'active',
   'disabled',
 ])
+
+// Generation pipeline job state machine (orientation_pipeline_contracts_v0.1.md §1).
+// current_stage shares this enum so a failed/cancelled job still records which
+// working stage it was in (needed to re-enter on retry).
+// `satisfies` pins every value to the contract's JobStatus union so this enum
+// can't silently drift from src/contracts/types.ts.
+export const jobStatusEnum = pgEnum('job_status', [
+  'queued',
+  'extracting',
+  'structuring',
+  'generating_quiz',
+  'qa_review',
+  'awaiting_approval',
+  'publishing',
+  'published',
+  'failed',
+  'cancelled',
+] satisfies readonly [JobStatus, ...JobStatus[]])
 
 // ── Tables ────────────────────────────────────────────────────────────────────
 
@@ -95,4 +115,37 @@ export const orgMemberships = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique().on(t.userId, t.orgId)],
+)
+
+// Client domain — one row per generation run (orientation_pipeline_contracts_v0.1.md §2).
+// Flat columns per HowDesign-DataModel.md §3.2; large stage outputs live in jsonb,
+// never inline payloads — the job row only ever holds a storage key + sha256.
+export const generationJobs = pgTable(
+  'generation_jobs',
+  {
+    id: text('id').primaryKey(), // prefixed ULID: job_<ULID>
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id),
+    siteId: text('site_id')
+      .notNull()
+      .references(() => sites.id),
+    status: jobStatusEnum('status').notNull().default('queued'),
+    currentStage: jobStatusEnum('current_stage').notNull().default('queued'),
+    reworkCount: integer('rework_count').notNull().default(0),
+    maxRework: integer('max_rework').notNull().default(3),
+    qaFlagged: boolean('qa_flagged').notNull().default(false),
+    packageId: text('package_id'), // FK orientation_packages; table doesn't exist until Step 5
+    artifacts: jsonb('artifacts').notNull().default({}),
+    qaHistory: jsonb('qa_history').notNull().default([]),
+    telemetry: jsonb('telemetry').notNull().default({}),
+    error: jsonb('error'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    idempotencyKey: text('idempotency_key').notNull(),
+  },
+  (t) => [unique().on(t.idempotencyKey)],
 )
