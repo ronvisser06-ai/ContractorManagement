@@ -139,6 +139,30 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Same conversation — compact or fresh conversation before Step 4.
 
+### Session 2026-06-24 — M0 / Feature 1, Step 4 — Org Creation + Client Admin Membership
+
+**What I Built**:
+- Migration `0002_create_org_rpc.sql`: `create_organization(p_org_id, p_org_name, p_membership_id)` — SECURITY DEFINER Postgres function that inserts `organizations` + `org_memberships(roles=[client_admin], status=active)` atomically in one transaction. Guards: `auth.uid() IS NULL` and empty name both raise exceptions. IDs are prefixed ULIDs generated in TypeScript and passed in so ULID format stays consistent project-wide.
+- `/onboarding/create-org` page + server action: org name form → `supabase.rpc('create_organization', …)` → redirect to `/app`. Skips onboarding if user already has an active membership.
+- `/app` updated: queries `org_memberships` (RLS-filtered, so user only sees their own); redirects to `/onboarding/create-org` if no active membership; shows org name + role badge (e.g. "Client Admin").
+- Middleware extended to guard `/onboarding/*` paths alongside `/app`.
+- TypeScript strict: zero errors.
+
+**What Went Wrong**:
+- Nothing broke.
+
+**What's Next**:
+- **Step 5 — Sites: create + list, scoped to the org**: site name form on `/app/sites`, server action inserts via Supabase client (RLS enforces org scope), list refreshes after creation.
+
+**Rules Followed**:
+- ✓ Read design docs §3.2 + §4.1 before building (Rules 1, 2)
+- ✓ One feature at a time (Rule 6)
+- ✓ Tested register → create org → refresh → logout/login in browser (Rule 7)
+- ✓ TypeScript strict clean before commit (Rule 7)
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Same conversation — fresh conversation before Step 5.
+
 ---
 
 ## Track Progress
