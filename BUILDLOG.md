@@ -61,6 +61,31 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Fresh — ready to start M0 in a focused conversation.
 
+### Session 2026-06-24 — M0 / Feature 1, Step 1 — Scaffold + Deploy
+
+**What I Built**:
+- Scaffolded Next.js 14 (App Router) + TypeScript strict + Tailwind + shadcn/ui into `web/`.
+- Local dev build clean; TypeScript strict compile clean.
+- Committed both the scaffold and root doc updates, pushed to GitHub (`ronvisser06-ai/ContractorManagement`, private).
+- Deployed live on Vercel — production build green.
+
+**What Went Wrong**:
+- **Vercel 404 (Root Directory)**: Vercel defaulted to the repo root; fixed by setting Root Directory to `web` in project settings.
+- **Case mismatch**: Vercel resolved the folder as `Web` (capital W) — fixed by correcting the Root Directory to exact lowercase `web`.
+- **Framework Preset defaulting to "Other"**: With the wrong root Vercel couldn't detect Next.js; fixed automatically once Root Directory was correct and preset set to Next.js.
+
+**What's Next**:
+- **Step 2 — Supabase + Drizzle + four-table migration with RLS**: stand up the DB connection, write the core schema (orgs, sites, users, orientations), add RLS policies, run the migration against Supabase.
+- Sentry integration deferred to a quick micro-step (not blocking Step 2).
+
+**Rules Followed**:
+- ✓ Planned before coding (Rules 1, 2)
+- ✓ One feature at a time (Rule 6)
+- ✓ Tested in browser — local + production (Rule 7)
+- ✓ Committed and pushed to git (Rule 9)
+
+**Context Usage**: Fresh — starting Step 2 in a new focused conversation.
+
 ---
 
 ## Track Progress
