@@ -86,6 +86,59 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Fresh — starting Step 2 in a new focused conversation.
 
+### Session 2026-06-24 — M0 / Feature 1, Step 2 — Supabase + Drizzle + Schema + RLS
+
+**What I Built**:
+- Installed `drizzle-orm`, `drizzle-kit`, `postgres`, `@supabase/supabase-js`, `@supabase/ssr`, `ulid`, `dotenv`.
+- Drizzle schema for the four foundation tables: `users` (uuid PK = auth.uid), `organizations`, `sites`, `org_memberships` — with four enums (`user_status`, `org_status`, `org_role`, `membership_status`) and `citext` on `primary_email`.
+- Migration `0000_premium_pretty_boy.sql`: citext extension, DDL for all four tables, RLS enabled on all four, `user_org_ids(uid)` SECURITY DEFINER helper, seven RLS policies.
+- `drizzle.config.ts`, `db:generate` / `db:migrate` / `db:studio` npm scripts, `newId(prefix)` ULID utility.
+- `/api/health` smoke test: confirmed all four tables present and RLS enabled.
+- Migration applied to Supabase via the session-mode pooler.
+
+**What Went Wrong**:
+- **Direct DB host unreachable**: `db.[ref].supabase.co` resolves only to an IPv6 address; the Claude Code sandbox has no IPv6 routing to the internet. Fixed by switching `DATABASE_URL` to the Supabase shared pooler (`aws-1-ca-central-1.pooler.supabase.com:5432`).
+- **Duplicate key in `.env.local`**: copy-paste error wrote `NEXT_PUBLIC_SUPABASE_URL=NEXT_PUBLIC_SUPABASE_URL=…`; corrected manually.
+- **Special chars in DB password**: `!`, `&`, `^` in the password must be URL-encoded (`%21`, `%26`, `%5E`) in the connection string; fixed in `.env.local`.
+
+**What's Next**:
+- **Step 3 — Auth**: register / login / logout / session; `handle_new_user` trigger; protected `/app` page; RLS isolation test.
+
+**Rules Followed**:
+- ✓ Read design docs before writing schema (Rules 1, 2)
+- ✓ One feature at a time (Rule 6)
+- ✓ Smoke-tested via `/api/health` (Rule 7)
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Same conversation as Step 1 — compact before Step 3.
+
+### Session 2026-06-24 — M0 / Feature 1, Step 3 — Auth + Users Trigger + Protected /app
+
+**What I Built**:
+- Supabase SSR wiring: `createBrowserClient` (`src/lib/supabase/client.ts`), async `createServerClient` (`src/lib/supabase/server.ts`), middleware that refreshes the session cookie on every request and guards `/app` → `/login` (unauthenticated) and `/login|/register` → `/app` (already authenticated).
+- Postgres `SECURITY DEFINER` trigger `handle_new_user` on `auth.users` — auto-creates `public.users` profile row on signup, reading `given_name` and `family_name` from `raw_user_meta_data`. Applied as migration `0001_auth_trigger.sql`.
+- Register page (`/register`): given name, family name, email, password; handles email-confirmation-required state ("check your email").
+- Login page (`/login`) and `logout` server action.
+- Protected `/app` page: reads profile via Supabase client (anon key + user JWT, so RLS is enforced); shows name/email + live RLS check — `SELECT * FROM users` returns exactly 1 row (own row only).
+- shadcn `Input` and `Label` UI primitives added.
+- TypeScript strict: zero errors across all new files.
+
+**What Went Wrong**:
+- Nothing broke. One cold-start false alarm: first curl to `/login` returned 500 due to dev-server startup lag; resolved after warmup.
+
+**What's Next**:
+- **Step 4 — RLS tightening + two-tenant isolation test**: write the automated cross-tenant test (second user cannot read first user's org/sites); harden any policy gaps found.
+- **Step 5 — Create org → client_admin membership**: org creation form, service-role insert of org + membership in one transaction.
+
+**Rules Followed**:
+- ✓ Read design docs + Next.js 16 dist/docs before writing framework code (Rules 1, 2)
+- ✓ One feature at a time (Rule 6)
+- ✓ Tested register → refresh → logout in browser (Rule 7)
+- ✓ TypeScript strict clean before commit (Rule 7)
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Same conversation — compact or fresh conversation before Step 4.
+
 ---
 
 ## Track Progress
