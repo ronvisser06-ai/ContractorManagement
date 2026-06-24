@@ -285,6 +285,20 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Verification + commit done in a fresh conversation after the interrupted session; fresh conversation before Step 3.
 
+### Session 2026-06-24 — Environment Fix — Dropbox `.next` Lock Recurrence (3rd time), Orphaned Dev Processes
+
+**What I Built**: Nothing — no app code changed.
+
+**What Went Wrong**:
+- User hit a Next.js dev runtime error on logout: "Jest worker encountered 2 child process exceptions, exceeding retry limit." The logout server action itself (sign-out + redirect, ~3 lines) had nothing capable of causing it.
+- Root cause was two compounding environment issues, both leftover from the Step 2 verification session: (1) the background `npm run dev` / `npx inngest-cli dev` processes started during that session's live e2e check were reported stopped by the tool, but their actual Windows process trees (PIDs for `next dev`, its `start-server.js` child, and a `jest-worker/processChild.js` grandchild, plus the Inngest dev binary) kept running orphaned; (2) the `com.dropbox.ignored` NTFS attribute on `web/.next` (set in Feature 2 Step 1 to stop Dropbox from sync-locking it) had been wiped when that session's `npm run build` recreated `.next`. With the flag gone, Dropbox resumed locking files inside `.next` mid-write while the orphaned server's worker child was reading/writing them — crashing it. This is the same family of issue as Step 1's `.next` EPERM lock, now its third occurrence.
+- Fixed by: killing the orphaned `node` processes (verified via `Get-CimInstance Win32_Process` command lines before killing, to avoid touching unrelated processes), then re-applying `com.dropbox.ignored` to `web/.next` (confirmed present via `cmd dir /r`, since `Get-Item -Stream` doesn't reliably list directory-level ADS in PowerShell 5.1).
+- **Learning carried forward**: background dev/Inngest servers started for verification must be confirmed actually dead (check `Get-CimInstance Win32_Process` / listening ports), not just trust a "stopped" status — and the Dropbox-ignore flag on `.next` should be re-checked after any `npm run build`, since a full build can recreate the directory and silently drop it.
+
+**What's Next**: Resume Feature 2, Step 3 (real Python extractor) — unaffected by this.
+
+**Context Usage**: Same conversation as the issue report — fresh conversation for Step 3.
+
 ---
 
 ## Track Progress
