@@ -106,6 +106,116 @@ export interface HazardBlock extends ContentBlock {
   controls: { type: 'engineering' | 'administrative' | 'ppe'; text: string }[]
 }
 
+// The remaining eight block types from the closed set (contracts §4.3). Each
+// narrows ContentBlock the same way HazardBlock does above. Adding a type
+// here means deliberately updating the renderer and validate.ts too — see
+// CLAUDE.md §5 "Closed block-type set".
+export interface HeadingBlock extends ContentBlock {
+  type: 'heading'
+  level: 1 | 2 | 3
+  text: string
+}
+
+export interface ParagraphBlock extends ContentBlock {
+  type: 'paragraph'
+  text: string
+}
+
+export interface ListBlock extends ContentBlock {
+  type: 'list'
+  ordered: boolean
+  items: string[]
+}
+
+export interface KeyPointBlock extends ContentBlock {
+  type: 'key_point'
+  text: string
+}
+
+export interface CalloutBlock extends ContentBlock {
+  type: 'callout'
+  variant: 'info' | 'warning' | 'critical'
+  title: string
+  text: string
+}
+
+export interface ImageBlock extends ContentBlock {
+  type: 'image'
+  asset_id: string
+  alt: string
+  caption?: string
+}
+
+export interface VideoBlock extends ContentBlock {
+  type: 'video'
+  asset_id: string
+  caption?: string
+  poster_asset_id?: string
+}
+
+export interface TableBlock extends ContentBlock {
+  type: 'table'
+  headers: string[]
+  rows: string[][]
+  caption?: string
+}
+
+// What the renderer actually receives once a raw ContentBlock has passed
+// validate.ts and been narrowed to one of the nine known shapes.
+export type ValidatedBlock =
+  | HeadingBlock
+  | ParagraphBlock
+  | ListBlock
+  | KeyPointBlock
+  | CalloutBlock
+  | HazardBlock
+  | ImageBlock
+  | VideoBlock
+  | TableBlock
+
+export interface LearningObjective {
+  id: ULID
+  text: string
+  source_block_ids: ULID[]
+}
+
+export interface Module {
+  id: ULID
+  order: number
+  title: string
+  source_slides: number[]
+  learning_objectives: LearningObjective[]
+  blocks: ContentBlock[]
+}
+
+export interface HazardIndexEntry {
+  block_id: ULID
+  module_id: ULID
+  hazard: string
+  severity: 'low' | 'medium' | 'high' | 'critical'
+}
+
+export interface Branding {
+  colors: { primary: string; secondary: string; accent: string }
+  fonts: { heading: string; body: string }
+  logo_asset_id: string | null
+}
+
+export interface ContentModelMeta {
+  title: string
+  site_id: string
+  language: string
+  estimated_minutes: number
+  reading_level: string
+}
+
+export interface ContentModel {
+  meta: ContentModelMeta
+  branding: Branding
+  modules: Module[]
+  hazard_index: HazardIndexEntry[]
+}
+
 export interface QuizQuestion {
   id: ULID
   module_id: ULID

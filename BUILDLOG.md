@@ -334,6 +334,41 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Single conversation, friction step as flagged — fresh conversation before Step 4.
 
+### Session 2026-06-24 — Feature 2, Step 4 — Fixed Renderer for the Closed Block-Type Set
+
+**What I Built**:
+- `src/contracts/types.ts`: full `ContentModel` shape (meta, branding, modules, hazard_index) plus typed interfaces for all nine closed block types (contracts §4.3) and a `ValidatedBlock` discriminated union — what the renderer receives once a raw block has passed validation.
+- `src/lib/renderer/validate.ts`: hand-rolled per-type schema validation (no new dependency — nine small fixed shapes don't justify pulling in a schema library). `validateBlock` checks `id`/`source_ref` generically, then per-type required fields; returns a structured error rather than throwing for anything unknown or malformed.
+- `src/components/renderer/`: `blocks.tsx` (the nine block components — heading/paragraph/list/key_point/callout/hazard/image/video/table — plus `UnknownBlockPlaceholder`), `BlockRenderer.tsx` (validates then dispatches; unknown/invalid blocks get a visible dashed placeholder in dev, render nothing in prod), `ContentModelView.tsx` (top-level: meta header + modules). Mobile-first Tailwind throughout; block text is always rendered as plain text content, never as injected markup. Image/video resolve through `next/image`/`<video>` from a signed-URL map built server-side per request (`resolve-asset-urls.ts`) — `unoptimized` on `next/image` since signed URLs are per-request and short-lived, so the optimizer can't usefully cache them.
+- `src/lib/renderer/fixture.ts`: a canned `ContentModel` (two modules — "Welcome & Site Overview", "Confined Space Entry") exercising all nine block types, plus one deliberately invalid block type (`carousel`) to prove the rejection path. Deliberately synthetic, not derived from any real extracted deck — structuring is still stubbed (M2 brings real AI structuring). Two synthetic placeholder JPEGs (generated locally, not from any customer deck) uploaded to `pipeline-artifacts` under `fixtures/content-model-preview/` for the image blocks; the video block's asset is deliberately *not* uploaded, exercising the "Video unavailable" graceful-fallback path (no ffmpeg available locally to synthesize a real clip, and the brief didn't call for one).
+- `/preview/content-model`: dev/QA-only route (unauthenticated — canned data only, no tenant exposure) rendering the fixture. `export const dynamic = 'force-dynamic'` — caught during build verification that without this, Next prerendered the route at *build* time and baked one set of signed URLs into static HTML, which would expire; forced dynamic so URLs resolve fresh per request as the contract requires ("resolved to a signed URL only at render time").
+- `src/test/content-model-validate.test.mts`: pure logic test (no Supabase, no DOM) — all nine valid block shapes pass, four invalid/unknown cases return a structured error without throwing.
+- `tsconfig.json`: added `allowImportingTsExtensions` so the new test can import `validate.ts` directly with Node's required explicit `.ts` extension under `tsc --noEmit`. `src/package.json` (`{"type":"module"}`) scopes ESM resolution to `src/` only, silencing a Node module-type warning on that same import without touching the root package's CommonJS-default tooling.
+
+**What Went Wrong**:
+- The first build silently prerendered `/preview/content-model` as a *static* page — Next had no way to detect the Supabase signed-URL call as dynamic data, so it baked build-time URLs into the HTML (they'd 404 after expiry, defeating the whole point of "resolved at render time"). Fixed with `export const dynamic = 'force-dynamic'`.
+- Jacques' eyes-on-it check (Rule 8) caught a real mobile bug a code review wouldn't have: at 375px, the hazard card's text was cut off and its `CRITICAL` badge was pushed off-screen entirely — real horizontal page overflow, not just a cramped layout. Root cause: the root `<body>` (`app/layout.tsx`) is `flex flex-col`, and the renderer's top-level container used `mx-auto` (auto margins) without an explicit width. Per the flexbox spec, auto margins on a flex item *disable* cross-axis stretch, so the item fell back to shrink-to-fit sizing — and the table block's `min-w-[480px]` (its own intentional horizontal-scroll mechanism) became that fit-content floor, widening the *entire page* to ~514px regardless of viewport. `min-w-0` alone didn't fix it (that only caps the minimum, not the base size); the real fix was adding an explicit `w-full` alongside `mx-auto max-w-2xl`. Confirmed via direct DOM measurement (`getBoundingClientRect`) before and after, not just visual inspection.
+- Mid-session the original ~8.8MB sample deck was replaced in `SampleOrientation/` with a smaller ~5.9MB one (Dropbox sync lag meant the file list looked stale momentarily) — re-ran the full Steps 1-3 pipeline regression (upload → real extractor → stubbed stages → `awaiting_approval`) against whichever file was actually present rather than a hardcoded name, confirming filename and size first. Pipeline unaffected by Step 4's changes, as expected (the renderer consumes the canned fixture, never extractor output, in this skeleton).
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint`, `npm run build` all clean (preview route correctly shows as `ƒ` dynamic in the build output, not `○` static).
+- `npm test` → 25/25 pass (13 new validator assertions + the 12 existing isolation tests, unaffected).
+- Real browser check (Playwright/Edge) at desktop (1280px) and 375px mobile, focused on the hazard and callout blocks per Jacques' note: all nine block types render correctly at both widths after the overflow fix; the deliberately-unknown `carousel` block shows a clear dashed amber placeholder instead of crashing; the missing video asset shows a clean "Video unavailable" card instead of a broken element.
+- Live pipeline regression: re-ran Steps 1-3 end-to-end against the updated (smaller) real deck in `SampleOrientation/` — `queued → extracting → structuring → generating_quiz → qa_review → awaiting_approval`, real `extracted_deck` artifact written. Confirms Step 4 didn't disturb the existing pipeline.
+
+**What's Next**:
+- **Step 5 — Approval gate + publish**: the `awaiting_approval` screen (rendered draft + canned quiz + any `qa_flagged` issues), approve → `publishing` → `published`, writing an immutable hash-pinned `OrientationPackage`.
+
+**Rules Followed**:
+- ✓ Read `Feature2-Pipeline-Skeleton-Brief.md` Step 4 + working agreement, contracts §4.2/§4.3 before building (Rules 1, 2)
+- ✓ One step only — no approval/publish UI, that's Step 5 (working agreement: steps are never bundled)
+- ✓ Closed block-type set enforced by a real validator, not just renderer-side trust (CLAUDE.md §5)
+- ✓ Eyes on it in a real browser at both widths (Rule 8) — caught a real bug a type-check couldn't have
+- ✓ TypeScript strict, lint, and build all clean; tests green; pipeline regression re-verified live
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Same conversation, picked back up cleanly after a mid-session interruption rather than discarding completed work — fresh conversation before Step 5.
+
 ---
 
 ## Track Progress
