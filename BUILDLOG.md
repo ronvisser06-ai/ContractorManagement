@@ -369,6 +369,37 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Same conversation, picked back up cleanly after a mid-session interruption rather than discarding completed work — fresh conversation before Step 5.
 
+### Session 2026-06-24 — Feature 2, Step 5 — Approval Gate + Publish (Feature 2 complete, M0 done)
+
+**What I Built**:
+- Migration `0006_nappy_mentor.sql` (drizzle-generated, hand-extended with RLS): `orientation_packages` table per contracts §4.6 / HowDesign-DataModel.md §3.2 (id, org_id, site_id, version, supersedes_id, content_model_ref, quiz_ref, asset_manifest, content_hash, requalification_policy, qa_flagged, status, approved_by, approved_at, published_at, created_at), `unique(site_id, version)`, RLS (read if org member; write if `content_approver` — matching the access table's single named role, no broadening). Also added the `package_version`/`approved_by`/`approved_at` columns on `generation_jobs` deliberately deferred since Step 1, and broadened that table's write policy to add `content_approver` alongside `client_admin`/`content_developer` (every role that legitimately writes some column across the job's lifecycle). Caught a Postgres NOTICE mid-migration — the first policy name was truncated at the 63-byte identifier limit — renamed to something shorter in both the file and the already-applied live policy.
+- `src/contracts/types.ts`: `Quiz`/`QuizMeta` (contracts §4.4) and `OrientationPackage` (contracts §4.6) types.
+- `run-generation-job.ts`: the `structuring`/`generating_quiz` stub payloads are no longer a generic `{note: "..."}` placeholder — they're now a small but *real* canned `ContentModel` (one module: heading, paragraph, a hazard block) and a `Quiz` whose question's `source_refs` actually cites the hazard block. Necessary plumbing, not scope creep into M2: Step 5's review screen needs something real to render and cite, still entirely code-generated rather than AI.
+- `publish-orientation-package.ts`: new Inngest function, triggered by a new `generation/job.approve` event, driving `publishing → published` — computes `content_hash` (`sha256(contentModelSha256:quizSha256)`), the next `version` and `supersedes_id` for the site (query max version, +1), inserts the immutable package row, sets `generation_jobs.package_id`/`package_version`, and updates `sites.active_package_id` (the column's documented purpose — "the one active orientation").
+- Approval gate: `[jobId]/actions.ts` (`approveJob`) and `[jobId]/approval-review.tsx`. The action's real gate isn't RLS (which permits client_admin/content_developer/content_approver to write `generation_jobs` for other legitimate reasons) — it explicitly re-checks the caller's `org_memberships.roles` for `content_approver` before touching anything, then moves the job to `publishing` via the approver's own session and fires the approve event. The review screen renders the draft through the Step 4 `ContentModelView`, the quiz via a new `QuizView` (each question's `source_refs` resolved to the actual cited block's text, not just an opaque id — the audit trail is only useful to a reviewer if they can see what's cited), a `qa_flagged` banner, and the requalification-policy picker + approve form (hidden entirely for non-approvers, who see a "waiting for a Content Approver" message instead). `JobTracker`'s stage list now extends through `publishing`/`published` so the whole skeleton's progress is visible, not just up to `awaiting_approval`.
+- `src/test/orientation-packages-isolation.test.mts`: same regression-net pattern as the other isolation tests, plus one beyond the template — a `client_admin` *without* `content_approver` is rejected on write, proving the role check is specific, not just "any org member."
+
+**What Went Wrong**:
+- Nothing broke in the app logic. One transient test flake: running the full suite once showed `generation-jobs-isolation.test.mts` failing, but it passed clean in isolation and on every subsequent full-suite run (30/30) — concurrent Supabase Auth admin calls across test files occasionally tripping something transient, not a real regression from this step's changes. Re-ran to confirm before treating it as green.
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint`, `npm run build` all clean.
+- `npm test` → 30/30 pass (5 new orientation_packages isolation assertions + the 25 existing, unaffected).
+- Live end-to-end against the real deck in `SampleOrientation/`: ran a job to `awaiting_approval`, approved as a `content_approver` (granted directly via the service role — flagged per the brief, no invite flow exists yet to grant it through the app) → published package **v1**, `content_hash` present, `supersedes_id` null, `requalification_policy` recorded correctly. Ran a second job on the **same site** → published **v2** whose `supersedes_id` correctly points at v1, and `sites.active_package_id` correctly updated to v2. A second test user holding `content_developer` but *not* `content_approver` was correctly rejected when attempting to approve a third job.
+
+**What's Next**:
+- **Feature 2 / M0 is complete** — the full walking skeleton (job record → real extraction → stubbed structure/quiz/QA → live tracker → approval gate → immutable versioned publish) runs end to end. `Jacques, ship check` → deploy, then `Jacques, what's next` for **M1** (tenancy, sites & contractor CRM) per ExecutionPlan.md.
+- Carried forward: actually create the second Vercel project for `python-extractor/` when ready to deploy past local dev (flagged since Step 3).
+
+**Rules Followed**:
+- ✓ Read `Feature2-Pipeline-Skeleton-Brief.md` Step 5 + working agreement, contracts §1/§4.4/§4.6, and `HowDesign-DataModel.md` before building (Rules 1, 2)
+- ✓ One step only — no bounded block editor, that's M2 per contracts §7 (working agreement: steps are never bundled)
+- ✓ RLS matches the access-control table's named role exactly (content_approver only on orientation_packages), with the finer "which specific action" rule correctly left to application code, consistent with how every other action-level check in this project works
+- ✓ TypeScript strict, lint, and build all clean; tests green; proven with two live publish runs plus a live rejection, not just unit tests
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Single conversation — Feature 2 complete, fresh conversation before M1.
+
 ---
 
 ## Track Progress

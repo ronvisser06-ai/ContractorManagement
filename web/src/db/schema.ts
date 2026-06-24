@@ -39,6 +39,18 @@ export const membershipStatusEnum = pgEnum('membership_status', [
   'disabled',
 ])
 
+// orientation_pipeline_contracts_v0.1.md §4.6
+export const requalificationPolicyEnum = pgEnum('requalification_policy', [
+  'full',
+  'new_content_only',
+  'none',
+])
+
+export const orientationPackageStatusEnum = pgEnum('orientation_package_status', [
+  'published',
+  'archived',
+])
+
 // Generation pipeline job state machine (orientation_pipeline_contracts_v0.1.md §1).
 // current_stage shares this enum so a failed/cancelled job still records which
 // working stage it was in (needed to re-enter on retry).
@@ -135,7 +147,8 @@ export const generationJobs = pgTable(
     reworkCount: integer('rework_count').notNull().default(0),
     maxRework: integer('max_rework').notNull().default(3),
     qaFlagged: boolean('qa_flagged').notNull().default(false),
-    packageId: text('package_id'), // FK orientation_packages; table doesn't exist until Step 5
+    packageId: text('package_id'), // FK orientation_packages, set on publish (Step 5)
+    packageVersion: integer('package_version'), // set alongside package_id on publish
     // Step 3: the uploaded deck (contracts §2 SourceAsset). Nullable at the column
     // level only so existing rows from Steps 1-2 testing don't break; every job
     // created going forward populates it at insert time.
@@ -144,6 +157,10 @@ export const generationJobs = pgTable(
     qaHistory: jsonb('qa_history').notNull().default([]),
     telemetry: jsonb('telemetry').notNull().default({}),
     error: jsonb('error'),
+    // Step 5: set by the approve action on the awaiting_approval -> publishing
+    // transition (contracts §1).
+    approvedBy: uuid('approved_by').references(() => users.id),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -152,4 +169,37 @@ export const generationJobs = pgTable(
     idempotencyKey: text('idempotency_key').notNull(),
   },
   (t) => [unique().on(t.idempotencyKey)],
+)
+
+// Client domain — immutable published artifact of the generation pipeline
+// (orientation_pipeline_contracts_v0.1.md §4.6 for the canonical shape;
+// HowDesign-DataModel.md §3.2 for platform-side columns). Never updated after
+// insert — a content edit produces a new version, never a mutation in place.
+export const orientationPackages = pgTable(
+  'orientation_packages',
+  {
+    id: text('id').primaryKey(), // prefixed ULID: pkg_<ULID>
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id),
+    siteId: text('site_id')
+      .notNull()
+      .references(() => sites.id),
+    version: integer('version').notNull(),
+    supersedesId: text('supersedes_id'), // FK orientation_packages.id; self-ref, nullable
+    contentModelRef: jsonb('content_model_ref').notNull(), // ArtifactRef {storage_key, sha256}
+    quizRef: jsonb('quiz_ref').notNull(), // ArtifactRef {storage_key, sha256}
+    assetManifest: jsonb('asset_manifest').notNull().default([]),
+    contentHash: text('content_hash').notNull(), // completions pin to this
+    requalificationPolicy: requalificationPolicyEnum('requalification_policy').notNull(),
+    qaFlagged: boolean('qa_flagged').notNull().default(false),
+    status: orientationPackageStatusEnum('status').notNull().default('published'),
+    approvedBy: uuid('approved_by')
+      .notNull()
+      .references(() => users.id),
+    approvedAt: timestamp('approved_at', { withTimezone: true }).notNull(),
+    publishedAt: timestamp('published_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.siteId, t.version)],
 )

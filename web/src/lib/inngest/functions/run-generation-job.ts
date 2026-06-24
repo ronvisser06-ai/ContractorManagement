@@ -7,12 +7,101 @@ import type { ArtifactRef, JobRecord, QAHistoryEntry, SourceAsset } from '@/cont
 const ARTIFACTS_BUCKET = 'pipeline-artifacts'
 const SIGNED_URL_TTL_SECONDS = 300
 
-// Stages still stubbed (Step 3 only replaces extracting). Each maps to the
+// Canned ContentModel for the still-stubbed structuring stage (real AI
+// structuring is M2). Shaped per contracts §4.2 — not just a placeholder note
+// — so the Step 4 renderer and the Step 5 approval screen have something real
+// to render and cite. The quiz stub below cites blk_stub_03 directly.
+function buildCannedContentModel(siteId: string): Record<string, unknown> {
+  return {
+    meta: {
+      title: 'Site Safety Orientation (Stub)',
+      site_id: siteId,
+      language: 'en',
+      estimated_minutes: 5,
+      reading_level: 'grade_8',
+    },
+    branding: {
+      colors: { primary: '#012A4A', secondary: '#2A9D8F', accent: '#F4A261' },
+      fonts: { heading: 'Inter', body: 'Inter' },
+      logo_asset_id: null,
+    },
+    modules: [
+      {
+        id: 'mod_stub_01',
+        order: 1,
+        title: 'Welcome',
+        source_slides: [0],
+        learning_objectives: [
+          {
+            id: 'obj_stub_01',
+            text: 'State the primary control for the stub hazard.',
+            source_block_ids: ['blk_stub_03'],
+          },
+        ],
+        blocks: [
+          { id: 'blk_stub_01', type: 'heading', level: 1, text: 'Welcome to the Site', source_ref: { slide_index: 0 } },
+          {
+            id: 'blk_stub_02',
+            type: 'paragraph',
+            text: 'This orientation covers the core safety rules for this site. Structuring is still stubbed — this canned module proves the pipeline end to end (Feature 2, Step 5).',
+            source_ref: { slide_index: 0 },
+          },
+          {
+            id: 'blk_stub_03',
+            type: 'hazard',
+            hazard: 'Slips, trips, and falls',
+            description: 'Wet or cluttered walkways are the most common cause of injury on site.',
+            severity: 'medium',
+            controls: [{ type: 'administrative', text: 'Keep walkways clear and report spills immediately.' }],
+            source_ref: { slide_index: 0 },
+          },
+        ],
+      },
+    ],
+    hazard_index: [
+      { block_id: 'blk_stub_03', module_id: 'mod_stub_01', hazard: 'Slips, trips, and falls', severity: 'medium' },
+    ],
+  }
+}
+
+// Canned Quiz for the still-stubbed generating_quiz stage, citing the canned
+// content model above via source_refs — what the approval screen displays
+// next to each question (contracts §4.4).
+function buildCannedQuiz(): Record<string, unknown> {
+  return {
+    meta: { pass_threshold: 0.8, attempts_allowed: 3, shuffle_questions: false, shuffle_options: false, question_count: 1 },
+    questions: [
+      {
+        id: 'q_stub_01',
+        module_id: 'mod_stub_01',
+        objective_id: 'obj_stub_01',
+        source_refs: ['blk_stub_03'],
+        type: 'single_choice',
+        difficulty: 'recall',
+        stem: 'What is the primary control for slips, trips, and falls on this site?',
+        options: [
+          { id: 'opt_a', text: 'Keep walkways clear and report spills immediately' },
+          { id: 'opt_b', text: 'Wear a hard hat at all times' },
+          { id: 'opt_c', text: 'Avoid the site entirely' },
+        ],
+        correct_option_ids: ['opt_a'],
+        rationale: 'Per blk_stub_03, clear walkways and prompt spill reporting are the stated administrative control.',
+      },
+    ],
+    coverage_map: { obj_stub_01: ['q_stub_01'] },
+  }
+}
+
+// Stages still stubbed (Step 3 only replaced extracting). Each maps to the
 // artifact slot it fills in JobRecord.artifacts (contracts §2). qa_review has
 // no artifact slot of its own — its verdict goes into qa_history instead.
-const STUBBED_STAGES: { stage: 'structuring' | 'generating_quiz'; artifactKey: keyof JobRecord['artifacts'] }[] = [
-  { stage: 'structuring', artifactKey: 'content_model' },
-  { stage: 'generating_quiz', artifactKey: 'quiz' },
+const STUBBED_STAGES: {
+  stage: 'structuring' | 'generating_quiz'
+  artifactKey: keyof JobRecord['artifacts']
+  buildPayload: (siteId: string) => Record<string, unknown>
+}[] = [
+  { stage: 'structuring', artifactKey: 'content_model', buildPayload: buildCannedContentModel },
+  { stage: 'generating_quiz', artifactKey: 'quiz', buildPayload: buildCannedQuiz },
 ]
 
 function buildEnvelope(
@@ -139,7 +228,7 @@ export const runGenerationJob = inngest.createFunction(
       await storeArtifact(supabase, jobId, siteId, 'extracted_deck', envelope)
     })
 
-    for (const { stage, artifactKey } of STUBBED_STAGES) {
+    for (const { stage, artifactKey, buildPayload } of STUBBED_STAGES) {
       await step.run(`enter-${stage}`, async () => {
         const { error } = await supabase
           .from('generation_jobs')
@@ -151,9 +240,7 @@ export const runGenerationJob = inngest.createFunction(
       await step.sleep(`pace-${stage}`, '2s')
 
       await step.run(`produce-${stage}`, async () => {
-        const envelope = buildEnvelope(jobId, stage, {
-          note: `stubbed ${stage} — canned envelope; the real implementation lands in a later step`,
-        })
+        const envelope = buildEnvelope(jobId, stage, buildPayload(siteId))
         await storeArtifact(supabase, jobId, siteId, artifactKey, envelope)
       })
     }

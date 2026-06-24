@@ -25,6 +25,8 @@ const STAGE_ORDER: JobRecord['status'][] = [
   'generating_quiz',
   'qa_review',
   'awaiting_approval',
+  'publishing',
+  'published',
 ]
 
 const STAGE_LABELS: Record<JobRecord['status'], string> = {

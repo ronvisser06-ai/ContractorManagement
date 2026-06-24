@@ -229,6 +229,43 @@ export interface QuizQuestion {
   rationale: string
 }
 
+export interface QuizMeta {
+  pass_threshold: number
+  attempts_allowed: number
+  shuffle_questions: boolean
+  shuffle_options: boolean
+  question_count: number
+}
+
+export interface Quiz {
+  meta: QuizMeta
+  questions: QuizQuestion[]
+  coverage_map: Record<ULID, ULID[]>
+}
+
+export type RequalificationPolicy = 'full' | 'new_content_only' | 'none'
+
+// Platform-side columns (HowDesign-DataModel.md §3.2) over the contract's
+// OrientationPackage shape (contracts §4.6).
+export interface OrientationPackage {
+  id: ULID
+  org_id: string
+  site_id: string
+  version: number
+  supersedes_id: ULID | null
+  content_model_ref: ArtifactRef
+  quiz_ref: ArtifactRef
+  asset_manifest: { asset_id: string; storage_key: string; mime: string }[]
+  content_hash: string
+  requalification_policy: RequalificationPolicy
+  qa_flagged: boolean
+  status: 'published' | 'archived'
+  approved_by: string
+  approved_at: string
+  published_at: string
+  created_at: string
+}
+
 export interface QAIssue {
   id: ULID
   severity: 'blocker' | 'major' | 'minor'
