@@ -31,7 +31,9 @@ Next.js 14 (App Router) + TypeScript · Tailwind + shadcn/ui · Supabase (Postgr
 The application is built feature-by-feature under Jacques coaching. To begin:
 
 1. Read `CLAUDE.md`, then `Feature1-Foundation-Brief.md`.
-2. In Claude Code: **"Jacques, let's build Feature 1, Step 1 only"** — scaffold + deploy a hello page to Vercel with Sentry.
+2. In Claude Code: **"Jacques, let's build Feature 1, Step 1 only"** — scaffold the Next.js app into **`web/`** and deploy a hello page to Vercel with Sentry.
 3. Work the build order one step at a time: test in the browser, commit each step, update `BUILDLOG.md`.
+
+**Repo layout:** the Next.js app lives in `web/`; the design docs, `CLAUDE.md`, and the Jacques files stay at the repo root. Run `npm` commands from inside `web/`.
 
 One feature per conversation (Rule 18). Ship before perfect (Rule 20).

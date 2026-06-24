@@ -52,6 +52,8 @@ On any conflict: behavior → FunctionalOverview; data shapes → the contracts/
 
 ## 4. Development sequence (milestones → one feature at a time)
 
+**Repo layout:** the Next.js app lives in **`/web`**; design docs, `CLAUDE.md`, and the Jacques files stay at the repo root. Run all `npm` commands from inside `web/`.
+
 Build in this order (ExecutionPlan §3). A milestone is **not** a feature — inside each, pick ONE feature, plan it, build it, test it, commit it, then take the next (Rule 6).
 
 - **M0 — Foundations & Walking Skeleton** (start here): scaffold, Supabase + Drizzle + Inngest, core schema + RLS, auth + RBAC (6 roles), org/site CRUD, the job state machine end-to-end with AI stages **stubbed**, fixed renderer, realtime stage tracker, approval gate. Deploy to staging.
