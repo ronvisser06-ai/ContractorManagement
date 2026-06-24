@@ -11,20 +11,38 @@ export default async function AppPage() {
 
   if (!user) redirect('/login')
 
-  // Fetch profile via the Supabase client (anon key + user JWT) so RLS is enforced.
-  // A user can only read their own row — this doubles as a live RLS check.
-  const { data: profile, error: profileError } = await supabase
-    .from('users')
-    .select('given_name, family_name, primary_email')
-    .eq('id', user.id)
+  // All queries go through the Supabase client (anon key + user JWT) so RLS is enforced.
+  const [{ data: profile }, { data: membership }] = await Promise.all([
+    supabase
+      .from('users')
+      .select('given_name, family_name, primary_email')
+      .eq('id', user.id)
+      .single(),
+    supabase
+      .from('org_memberships')
+      .select('org_id, roles')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle(),
+  ])
+
+  // No active org membership → send to onboarding
+  if (!membership) redirect('/onboarding/create-org')
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('id, name')
+    .eq('id', membership.org_id)
     .single()
 
-  // Verify RLS: query the full table — should return exactly 1 row (own row only)
-  const { data: allRows } = await supabase
-    .from('users')
-    .select('id')
-
-  const rlsOk = Array.isArray(allRows) && allRows.length === 1
+  const roleLabel = (membership.roles as string[])
+    .map((r) =>
+      r
+        .split('_')
+        .map((w) => w[0].toUpperCase() + w.slice(1))
+        .join(' '),
+    )
+    .join(', ')
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -46,28 +64,24 @@ export default async function AppPage() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Welcome, {profile?.given_name} {profile?.family_name}
           </h1>
-          <p className="text-muted-foreground">{profile?.primary_email}</p>
+          <p className="text-muted-foreground text-sm">{profile?.primary_email}</p>
         </div>
 
-        {profileError && (
-          <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Profile error: {profileError.message}
+        <div className="rounded-lg border bg-card px-5 py-4 space-y-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Organization
+            </p>
+            <p className="mt-0.5 text-lg font-semibold">{org?.name}</p>
           </div>
-        )}
-
-        <div className="rounded-md border bg-card px-4 py-3 text-sm">
-          <p className="font-medium">RLS check</p>
-          <p className="text-muted-foreground mt-1">
-            Querying <code>SELECT * FROM users</code> as this user returns{' '}
-            <strong>{allRows?.length ?? '?'} row(s)</strong>.{' '}
-            {rlsOk ? (
-              <span className="text-green-600">✓ Isolated to own row only.</span>
-            ) : (
-              <span className="text-destructive">
-                ✗ Expected 1 row — check RLS policies.
-              </span>
-            )}
-          </p>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Your role
+            </p>
+            <span className="mt-0.5 inline-block rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-medium text-primary">
+              {roleLabel}
+            </span>
+          </div>
         </div>
       </main>
     </div>

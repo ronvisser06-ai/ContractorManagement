@@ -35,7 +35,11 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Guard: redirect unauthenticated requests to /login
-  if (!user && request.nextUrl.pathname.startsWith('/app')) {
+  if (
+    !user &&
+    (request.nextUrl.pathname.startsWith('/app') ||
+      request.nextUrl.pathname.startsWith('/onboarding'))
+  ) {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/login'
     return NextResponse.redirect(loginUrl)

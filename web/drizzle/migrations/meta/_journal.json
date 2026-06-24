@@ -15,6 +15,13 @@
       "when": 1782320471929,
       "tag": "0001_auth_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782320471930,
+      "tag": "0002_create_org_rpc",
+      "breakpoints": true
     }
   ]
 }
