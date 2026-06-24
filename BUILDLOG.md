@@ -163,6 +163,35 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Same conversation — fresh conversation before Step 5.
 
+### Session 2026-06-24 — M0 / Feature 1, Step 5 — Sites: Create + List, Org-Scoped
+
+**What I Built**:
+- `/app/sites` page: lists the caller's org's sites (queried via the Supabase client so RLS applies); create form (name only) shown only when the caller holds `client_admin` in that org.
+- `createSite` server action (`src/app/app/sites/actions.ts`): resolves `org_id` from the caller's own active `org_memberships` row (never trusts client input), inserts via the Supabase client — the existing `"sites: write if client_admin"` RLS policy (shipped in migration `0000`) is what actually blocks non-admins, the UI gating is just the friendly layer on top.
+- Added a "Manage sites" link from `/app` to `/app/sites`.
+- No new migration needed — the sites table + RLS policies already existed from Step 2.
+
+**What Went Wrong**:
+- Nothing in the app code. Tooling-only snag: no browser automation was available in-session (no `chromium-cli`, no Playwright pre-installed). Installed `playwright` standalone in the scratch dir (`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`) and drove the existing system Edge install via `channel: 'msedge'` instead of downloading a bundled Chromium.
+- Email confirmation is enabled on the Supabase project, so registering through the UI doesn't yield a session. Created two confirmed test users directly via the Supabase Admin API (service-role key, `auth.admin.createUser` with `email_confirm: true`) to get two real tenants to test cross-org isolation against.
+
+**Verified in browser** (two real tenants, via Playwright/Edge):
+- Tenant A creates "Plant A1" → appears immediately → persists after reload.
+- Tenant B's `/app/sites` shows zero sites (cannot see "Plant A1"); creates "Plant B1" → appears.
+- Back on Tenant A: still sees only "Plant A1" — confirms org-scoping holds in both directions.
+
+**What's Next**:
+- **Step 6 — Role-aware empty dashboard shell**, then deploy to staging — closes out Feature 1 / M0's foundation slice per `Feature1-Foundation-Brief.md`.
+
+**Rules Followed**:
+- ✓ Read `HowDesign-DataModel.md` §3.2/§4.1 + `Feature1-Foundation-Brief.md` before building (Rules 1, 2)
+- ✓ One feature at a time (Rule 6)
+- ✓ TypeScript strict, lint, and production build all clean
+- ✓ Tested create → persist → cross-tenant isolation in a real browser (Rule 7)
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Same conversation — fresh conversation before Step 6.
+
 ---
 
 ## Track Progress

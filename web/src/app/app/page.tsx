@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
@@ -83,6 +84,10 @@ export default async function AppPage() {
             </span>
           </div>
         </div>
+
+        <Button asChild variant="outline">
+          <Link href="/app/sites">Manage sites</Link>
+        </Button>
       </main>
     </div>
   )
