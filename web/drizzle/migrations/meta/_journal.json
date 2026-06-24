@@ -8,6 +8,13 @@
       "when": 1782320471928,
       "tag": "0000_premium_pretty_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782320471929,
+      "tag": "0001_auth_trigger",
+      "breakpoints": true
     }
   ]
 }
