@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
@@ -40,52 +39,36 @@ export default async function SitesPage({ searchParams }: Props) {
   const { error } = await searchParams
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b px-4 py-3 sm:px-6">
-        <div className="mx-auto flex max-w-3xl items-center justify-between">
-          <span className="text-sm font-medium text-muted-foreground">
-            Contractor Orientation
-          </span>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/app">Back to dashboard</Link>
-          </Button>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold tracking-tight">Sites</h1>
+
+      {error && (
+        <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
         </div>
-      </header>
+      )}
 
-      <main className="mx-auto w-full max-w-3xl flex-1 space-y-6 px-4 py-8 sm:px-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Sites</h1>
-
-        {error && (
-          <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
+      {isClientAdmin && (
+        <form action={createSite} className="flex items-end gap-3 rounded-lg border bg-card p-4">
+          <div className="flex-1 space-y-2">
+            <Label htmlFor="name">Site name</Label>
+            <Input id="name" name="name" placeholder="Main Plant" required autoFocus />
           </div>
-        )}
+          <Button type="submit">Add site</Button>
+        </form>
+      )}
 
-        {isClientAdmin && (
-          <form
-            action={createSite}
-            className="flex items-end gap-3 rounded-lg border bg-card p-4"
-          >
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="name">Site name</Label>
-              <Input id="name" name="name" placeholder="Main Plant" required autoFocus />
-            </div>
-            <Button type="submit">Add site</Button>
-          </form>
+      <ul className="space-y-2">
+        {sites && sites.length > 0 ? (
+          sites.map((site) => (
+            <li key={site.id} className="rounded-lg border bg-card px-4 py-3">
+              <p className="font-medium">{site.name}</p>
+            </li>
+          ))
+        ) : (
+          <p className="text-muted-foreground text-sm">No sites yet.</p>
         )}
-
-        <ul className="space-y-2">
-          {sites && sites.length > 0 ? (
-            sites.map((site) => (
-              <li key={site.id} className="rounded-lg border bg-card px-4 py-3">
-                <p className="font-medium">{site.name}</p>
-              </li>
-            ))
-          ) : (
-            <p className="text-muted-foreground text-sm">No sites yet.</p>
-          )}
-        </ul>
-      </main>
+      </ul>
     </div>
   )
 }

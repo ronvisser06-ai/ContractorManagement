@@ -192,6 +192,38 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Same conversation — fresh conversation before Step 6.
 
+### Session 2026-06-24 — M0 / Feature 1, Step 6 — Role-Aware Shell + Automated Isolation Test (Feature 1 complete)
+
+**What I Built**:
+- `src/app/app/layout.tsx`: shared shell for all `/app/*` routes. Reads the caller's role(s) from `org_memberships` once, shows the org name + role badge, and renders nav driven by a small `NAV_ITEMS`/`COMING_SOON` table keyed on `org_role` (imported from `db/schema.ts` so the role list has one source of truth). `client_admin` sees a live "Sites" link; `client_admin`/`content_developer`/`content_approver` see "Contractors"/"Orientations" as inert "Soon"-badged placeholders — nothing routes there, by design (no new feature pages). Logout moved here from the dashboard.
+- Trimmed `/app/page.tsx` and `/app/sites/page.tsx` down to just their page content now that the header/nav/org/role chrome lives in the layout — removes the duplicate header markup both pages used to carry.
+- `npm test`: added a `test` script running Node's **built-in** test runner (`node --env-file=.env.local --test`) against `.test.mts` files — no new test-framework dependency. Node 24's native TS type-stripping runs the `.ts` syntax directly; `.mts` avoids the CJS/ESM ambiguity warning.
+- `src/test/two-tenant-isolation.test.mts`: the regression net from CLAUDE.md §7. Seeds two throwaway users via the Supabase admin API, signs each in, has each create an org + site through the real app path (`create_organization` RPC + a `sites` insert), then asserts under RLS: neither tenant can read the other's org or site (by direct id lookup *or* via an unfiltered listing), and tenant B's *write* into tenant A's org is rejected. Cleans up (auth user + all seeded rows) in an `after()` hook — verified no leftover rows/users after a run.
+- `tsconfig.json` already globbed `**/*.mts`, so the test file is strict-TS-checked along with the rest of the app; no config changes needed there.
+
+**What Went Wrong**:
+- First dev-server restart after a fresh `npm run build` threw repeated `EPERM: operation not permitted, rename ...` errors inside `.next/dev/` (the repo lives inside a Dropbox-synced folder, which intermittently locks files mid-write on Windows). Fixed by killing the dev process, deleting `.next`, and restarting clean.
+- No other surprises — RLS already enforced everything the isolation test checks; the test exists to keep it that way as the schema evolves.
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint`, `npm run build` all clean.
+- `npm test` → all 7 isolation assertions pass against the live Supabase project; confirmed zero leftover seeded users/orgs afterward.
+- Browser (Playwright/Edge), desktop + 375px mobile viewport: role-aware nav renders correctly for a Client Admin (Sites live, Contractors/Orientations "Soon"), no horizontal overflow at mobile width, and the full Feature 1 acceptance path holds end-to-end — create site → persists on reload → second tenant sees none of it.
+- **Feature 1 (M0 foundation slice) Definition of Done is met**: register → login → create org → add site → refresh persists → second tenant isolated, proven both manually and by an automated test; lint + build green; BUILDLOG updated.
+
+**What's Next**:
+- `Jacques, ship check` → deploy (push auto-deploys to Vercel) → `Jacques, what's next` for **Feature 2**: the stubbed job-state-machine skeleton + fixed renderer (M0's remaining piece per `ExecutionPlan.md`, ahead of the real generation pipeline in M2).
+
+**Rules Followed**:
+- ✓ Read `Feature1-Foundation-Brief.md` + `HowDesign-DataModel.md` §2/§4 before building (Rules 1, 2)
+- ✓ One feature at a time (Rule 6)
+- ✓ Built the RLS regression-net test per §7, not just a manual check
+- ✓ TypeScript strict, lint, and build all clean; tested in a real browser, including mobile width (Rule 7)
+- ✓ No new runtime/test-framework dependency — used Node's built-in test runner (Rule 12, stack discipline)
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Same conversation — fresh conversation before Feature 2.
+
 ---
 
 ## Track Progress
