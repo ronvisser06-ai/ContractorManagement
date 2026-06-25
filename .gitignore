@@ -46,3 +46,6 @@ python-extractor/.venv/
 
 # Real deck dropped in for Step 3 testing — not for the repo
 SampleOrientation/
+
+.vercel
+.env*

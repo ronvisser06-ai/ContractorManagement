@@ -400,6 +400,35 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Single conversation — Feature 2 complete, fresh conversation before M1.
 
+### Session 2026-06-25 — M0 Deploy + Sentry
+
+**What I Built**:
+- Confirmed the two env vars needed for non-pipeline production flows: `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` — both set in Vercel Production.
+- Added `python-extractor/runtime.txt` → `python-3.12` (future-proofing for when the extractor Vercel project is created in M2; fixes the `str | None` PEP 604 syntax incompatibility with Vercel's default Python 3.9 runtime).
+- Wired Sentry via `@sentry/wizard@latest -i nextjs`: installed `@sentry/nextjs`; created `sentry.server.config.ts`, `sentry.edge.config.ts`, `src/instrumentation.ts`, `src/instrumentation-client.ts`, `src/app/global-error.tsx`; patched `next.config.ts` with `withSentryConfig` (org `visser-solutions-inc`, project `javascript`). `SENTRY_AUTH_TOKEN` written to `web/.env.sentry-build-plugin` (gitignored, never committed — confirmed via `git log`). Sentry vars to set in Vercel Production: `SENTRY_AUTH_TOKEN` (secret), `SENTRY_ORG=visser-solutions-inc`, `SENTRY_PROJECT=javascript`, `NEXT_PUBLIC_SENTRY_DSN`.
+- Removed both wizard-generated test routes (`web/src/app/sentry-example-page/`, `web/src/app/api/sentry-example-api/`) before committing — never tracked.
+- Prod smoke: latest Vercel production deploy **● Ready** at `https://contractor-management-brown.vercel.app`. Manual register → create org → add site verification pending Ron.
+
+**What Went Wrong**:
+- `@sentry/wizard` requires an interactive TTY and was run by Ron manually (`! npx @sentry/wizard@latest -i nextjs --no-telemetry`); the wizard's non-interactive run from the Claude Code sandbox fails with `ERR_TTY_INIT_FAILED`. Documented so future Sentry updates know to run the wizard from a real terminal.
+
+**What's Next**:
+- Ron manually verifies the prod smoke test: register → create org → add site on `contractor-management-brown.vercel.app`.
+- **M2-deploy task list** (deferred from M0, execute when M2 generation pipeline is ready to ship):
+  - [ ] **Inngest Cloud**: create app → get `INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` → set both in Vercel Production → remove `INNGEST_DEV=1` from prod env → register endpoint `https://contractor-management-brown.vercel.app/api/inngest` in Inngest dashboard.
+  - [ ] **python-extractor Vercel project**: create in Vercel dashboard (Root Directory = `python-extractor`) → set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EXTRACTOR_SHARED_SECRET` → confirm `/health` returns `{"status":"ok"}`.
+  - [ ] **Wire extractor into web**: set `EXTRACTOR_URL` (deployed extractor URL) and `EXTRACTOR_SHARED_SECRET` in Vercel Production for the web project.
+  - [ ] **Decide extractor timeout host before pilot**: real 45-asset deck took ~73s; Vercel Hobby caps at 10s, Pro at 60s — neither covers the worst case. Options: Vercel Pro + `maxDuration: 300`, or move extractor to Fly.io/Railway. Decide and implement before the pilot.
+- Start **M1 — Tenancy, Sites & Contractor CRM** per ExecutionPlan.md.
+
+**Rules Followed**:
+- ✓ Report-only audit before acting (no changes without confirmation)
+- ✓ Test routes deleted before commit — never shipped to production
+- ✓ Secret (`SENTRY_AUTH_TOKEN`) gitignored and never committed; verified via `git log`
+- ✓ M2-deploy tasks written down explicitly so nothing is forgotten at M2 ship time
+
+**Context Usage**: Fresh conversation — M0 deploy closed out; fresh conversation before M1.
+
 ---
 
 ## Track Progress
