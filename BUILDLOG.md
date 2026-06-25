@@ -429,6 +429,35 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Fresh conversation — M0 deploy closed out; fresh conversation before M1.
 
+### Session 2026-06-25 — M1 / Step 2 — Client Admin Invites a Contractor Company (Dev-Mode Link)
+
+**What I Built**:
+- `web/src/app/app/contractors/page.tsx`: lists the org's linked companies (client_company_links joined to contractor_companies via the Supabase embedded-resource select), with status badges (invited/active/suspended). Pending invitations are fetched separately and keyed by company_id so the dev-mode link appears inline under each pending entry. `headers()` constructs the full base URL server-side (no `NEXT_PUBLIC_APP_URL` needed). The banner shown immediately after an invite (`?invite_token=<token>`) also displays the full link.
+- `web/src/app/app/contractors/actions.ts` (`inviteContractorCompany`): validates caller is client_admin; rejects duplicate pending invites for the same email; creates a stub `contractor_companies` row via the admin client (no user INSERT policy exists — Step 3 registration will use a SECURITY DEFINER RPC to fill in the real profile); inserts `client_company_links` (status=invited, RLS-enforced) and `invitations` (type=company, 64-char hex token, channel=email, 7-day expiry) via the user client; logs the invite link and redirects with `?invite_token=<token>`.
+- `layout.tsx`: moved "Contractors" from the Coming Soon placeholder list to the live nav (`/app/contractors`, `client_admin` only).
+
+**What Went Wrong**:
+- TypeScript strict rejected the `as CompanyLink[]` cast on the Supabase result: without generated schema types, the client types the embedded `contractor_companies` field as an array (`{ ... }[]`) even though the FK is many-to-one and PostgREST returns a single object. Fixed with `as unknown as CompanyLink[]` — the two-step cast is intentional and safe here.
+
+**Verified** (in browser — manual, no Playwright this session):
+- Contractors nav link visible for a Client Admin, hidden for other roles.
+- Invite form visible for client_admin; non-admin gets the RLS error via redirect.
+- Issue invite → green banner with full URL immediately; company appears in list with "invited" badge + inline dev-mode link.
+- Duplicate invite for the same email correctly rejected ("A pending invite already exists").
+- 43/43 tests pass (no regressions); tsc strict + lint + build clean.
+
+**What's Next**:
+- **Step 3 — Company registration + profile**: opening the invite link creates the Contractor Admin user + updates the stub company (legal_name, trade_types, contact_info) + flips the link to active — all in a SECURITY DEFINER RPC, same pattern as `create_organization`.
+
+**Rules Followed**:
+- ✓ Read `M1-ContractorCRM-Brief.md` Step 2 + working agreement, `HowDesign-DataModel.md` §3.4 before building (Rules 1, 2)
+- ✓ One step only — no registration, no profile (that's Step 3)
+- ✓ RLS enforces the gate; app-layer role check is an additional friendly guard
+- ✓ TypeScript strict, lint, and build all clean; tested in a real browser (Rule 7)
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Single conversation — fresh conversation before Step 3.
+
 ### Session 2026-06-25 — M1 / Step 1 — Contractor + Bridge Schema + Relationship-Derived RLS
 
 **What I Built**:
