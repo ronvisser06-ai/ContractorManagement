@@ -50,6 +50,13 @@
       "when": 1782341277473,
       "tag": "0006_nappy_mentor",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782424588776,
+      "tag": "0007_chubby_baron_zemo",
+      "breakpoints": true
     }
   ]
 }

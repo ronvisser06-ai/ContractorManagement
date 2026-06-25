@@ -203,3 +203,170 @@ export const orientationPackages = pgTable(
   },
   (t) => [unique().on(t.siteId, t.version)],
 )
+
+// ── M1 Enums ──────────────────────────────────────────────────────────────────
+
+// Contractor domain — roles within a contractor company (additive)
+export const companyRoleEnum = pgEnum('company_role', ['contractor_admin', 'worker'])
+
+// Contractor domain — lifecycle for a company_membership invite
+export const onboardingStatusEnum = pgEnum('onboarding_status', [
+  'entered',
+  'invited',
+  'logged_in',
+  'account_created',
+])
+
+// Bridge domain — state of a client ↔ contractor company relationship
+export const linkStatusEnum = pgEnum('link_status', ['invited', 'active', 'suspended'])
+
+// Bridge domain — state of a site ↔ company assignment or worker activation
+export const assignmentStatusEnum = pgEnum('assignment_status', ['active', 'removed'])
+
+// Shared — invitation delivery channel (SMS deferred; column exists for M3+)
+export const invitationChannelEnum = pgEnum('invitation_channel', ['email', 'sms'])
+
+// Shared — what kind of entity is being invited
+export const invitationTypeEnum = pgEnum('invitation_type', ['company', 'worker', 'org_user'])
+
+// Shared — lifecycle of an invitation token
+export const invitationStatusEnum = pgEnum('invitation_status', [
+  'pending',
+  'accepted',
+  'expired',
+  'revoked',
+])
+
+// ── M1 Tables ─────────────────────────────────────────────────────────────────
+
+// Contractor domain — global entity, not scoped to any org
+// id is a prefixed ULID: cco_<ULID>
+export const contractorCompanies = pgTable('contractor_companies', {
+  id: text('id').primaryKey(),
+  legalName: text('legal_name').notNull(),
+  tradeTypes: text('trade_types').array().notNull().default([]),
+  contactName: text('contact_name'),
+  contactEmail: citext('contact_email'),
+  contactPhone: text('contact_phone'),
+  logoAssetId: text('logo_asset_id'), // FK assets (deferred until M2 media)
+  status: userStatusEnum('status').notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// Contractor domain — M:N worker/admin ↔ company, one row per enrollment
+export const companyMemberships = pgTable(
+  'company_memberships',
+  {
+    id: text('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    companyId: text('company_id')
+      .notNull()
+      .references(() => contractorCompanies.id),
+    roles: companyRoleEnum('roles').array().notNull().default([]),
+    contractorRef: text('contractor_ref'), // company's own worker ID
+    onboardingStatus: onboardingStatusEnum('onboarding_status')
+      .notNull()
+      .default('entered'),
+    invitedEmail: citext('invited_email'), // email the invite targeted
+    status: membershipStatusEnum('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.userId, t.companyId)],
+)
+
+// Identity — verified email addresses for a user; supports one-person-many-emails
+export const userEmails = pgTable('user_emails', {
+  id: text('id').primaryKey(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id),
+  email: citext('email').notNull().unique(),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// Bridge domain — a client org has invited / works with a contractor company
+export const clientCompanyLinks = pgTable(
+  'client_company_links',
+  {
+    id: text('id').primaryKey(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id),
+    companyId: text('company_id')
+      .notNull()
+      .references(() => contractorCompanies.id),
+    status: linkStatusEnum('status').notNull().default('invited'),
+    invitedAt: timestamp('invited_at', { withTimezone: true }).notNull().defaultNow(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.orgId, t.companyId)],
+)
+
+// Bridge domain — a company is eligible to work a specific site (eligibility layer)
+export const siteCompanyAssignments = pgTable(
+  'site_company_assignments',
+  {
+    id: text('id').primaryKey(),
+    siteId: text('site_id')
+      .notNull()
+      .references(() => sites.id),
+    companyId: text('company_id')
+      .notNull()
+      .references(() => contractorCompanies.id),
+    status: assignmentStatusEnum('status').notNull().default('active'),
+    assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.siteId, t.companyId)],
+)
+
+// Bridge domain — crew dispatch: which workers are actually active on a site
+// Company assignment = eligibility; worker activation = presence (§4.5)
+export const siteWorkerActivations = pgTable(
+  'site_worker_activations',
+  {
+    id: text('id').primaryKey(),
+    siteId: text('site_id')
+      .notNull()
+      .references(() => sites.id),
+    companyId: text('company_id')
+      .notNull()
+      .references(() => contractorCompanies.id),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    status: assignmentStatusEnum('status').notNull().default('active'),
+    activatedBy: uuid('activated_by')
+      .notNull()
+      .references(() => users.id),
+    activatedAt: timestamp('activated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.siteId, t.userId)],
+)
+
+// Shared — tokenized invite records; channel column present even though SMS is deferred
+export const invitations = pgTable('invitations', {
+  id: text('id').primaryKey(), // prefixed ULID: inv_<ULID>
+  type: invitationTypeEnum('type').notNull(),
+  token: text('token').notNull().unique(),
+  channel: invitationChannelEnum('channel').notNull().default('email'),
+  email: citext('email'), // target when channel = email
+  phone: text('phone'), // target when channel = sms
+  orgId: text('org_id').references(() => organizations.id),
+  companyId: text('company_id').references(() => contractorCompanies.id),
+  intendedRoles: text('intended_roles').array().notNull().default([]),
+  status: invitationStatusEnum('status').notNull().default('pending'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdBy: uuid('created_by')
+    .notNull()
+    .references(() => users.id),
+  acceptedUserId: uuid('accepted_user_id').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+})
