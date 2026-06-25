@@ -429,6 +429,35 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Fresh conversation — M0 deploy closed out; fresh conversation before M1.
 
+### Session 2026-06-25 — M1 / Step 1 — Contractor + Bridge Schema + Relationship-Derived RLS
+
+**What I Built**:
+- `schema.ts`: 7 new enums (`company_role`, `onboarding_status`, `link_status`, `assignment_status`, `invitation_channel`, `invitation_type`, `invitation_status`) and 7 new tables (`contractor_companies`, `company_memberships`, `user_emails`, `client_company_links`, `site_company_assignments`, `site_worker_activations`, `invitations`), all per HowDesign-DataModel.md §3.3–3.4. `invitations.channel` column included even though SMS is deferred.
+- Migration `0007_chubby_baron_zemo.sql` (drizzle-generated, hand-extended with RLS):
+  - 3 SECURITY DEFINER helper functions (`user_company_ids`, `user_linked_org_ids`, `org_linked_company_ids`) wired together to express the cross-domain relationships without recursion.
+  - Covering indexes on `company_memberships(company_id)` and `client_company_links(company_id)` (the right-prefix lookups not covered by the unique-constraint btree).
+  - 18 RLS policies across the 7 tables enforcing the three-domain model: own members read/write, linked clients read (sliced view enforced at app layer), unrelated parties see nothing.
+- `contractor-crm-isolation.test.mts`: 16 assertions proving the RLS: contractor admin sees own company + memberships + link; linked client sees all three; unrelated client sees none of them; write isolation enforced (unrelated client can't insert companies/foreign links; linked client can't write memberships).
+
+**What Went Wrong**:
+- Nothing. Migration applied clean; all 43 tests pass on first run.
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint`, `npm run build` all clean.
+- `npm test` → 43/43 pass (16 new + 27 existing, unaffected).
+
+**What's Next**:
+- **Step 2 — Client invites a contractor company**: Client Admin "Contractors" page, invite form (company contact email), creates `invitations` row (type=company, tokenized) + `client_company_links` row (status=invited), dev-mode link displayed/logged. No email yet.
+
+**Rules Followed**:
+- ✓ Read `M1-ContractorCRM-Brief.md` Step 1 + working agreement, `HowDesign-DataModel.md` §3.3–3.4 + §4.2–4.5 before building (Rules 1, 2)
+- ✓ One step only — no UI, no invite flow, no Step 2 tables seeded beyond what RLS testing requires
+- ✓ Helper functions SECURITY DEFINER to break the policy → subquery recursion that felled earlier helper patterns
+- ✓ TypeScript strict, lint, and build all clean; 43 tests green
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Single conversation — fresh conversation before Step 2.
+
 ---
 
 ## Track Progress
