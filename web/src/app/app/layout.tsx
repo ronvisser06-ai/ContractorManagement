@@ -20,10 +20,12 @@ interface ComingSoonItem {
   roles: OrgRole[]
 }
 
-const NAV_ITEMS: NavItem[] = [{ label: 'Sites', href: '/app/sites', roles: ['client_admin'] }]
+const NAV_ITEMS: NavItem[] = [
+  { label: 'Sites', href: '/app/sites', roles: ['client_admin'] },
+  { label: 'Contractors', href: '/app/contractors', roles: ['client_admin'] },
+]
 
 const COMING_SOON: ComingSoonItem[] = [
-  { label: 'Contractors', roles: ['client_admin'] },
   { label: 'Orientations', roles: ['client_admin', 'content_developer', 'content_approver'] },
 ]
 
