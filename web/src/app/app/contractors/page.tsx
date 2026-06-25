@@ -28,17 +28,39 @@ interface PendingInvite {
   company_id: string
 }
 
-const STATUS_STYLES: Record<string, string> = {
+interface WorkerSlice {
+  company_id: string
+  invited_email: string | null
+  onboarding_status: string
+}
+
+const LINK_STATUS_STYLES: Record<string, string> = {
   invited: 'bg-yellow-100 text-yellow-800',
   active: 'bg-green-100 text-green-800',
   suspended: 'bg-red-100 text-red-800',
 }
 
+const ONBOARDING_STYLES: Record<string, string> = {
+  entered: 'bg-blue-100 text-blue-800',
+  invited: 'bg-yellow-100 text-yellow-800',
+  logged_in: 'bg-indigo-100 text-indigo-800',
+  account_created: 'bg-green-100 text-green-800',
+}
+
 function StatusBadge({ status }: { status: string }) {
-  const cls = STATUS_STYLES[status] ?? 'bg-muted text-muted-foreground'
+  const cls = LINK_STATUS_STYLES[status] ?? 'bg-muted text-muted-foreground'
   return (
     <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${cls}`}>
       {status}
+    </span>
+  )
+}
+
+function OnboardingBadge({ status }: { status: string }) {
+  const cls = ONBOARDING_STYLES[status] ?? 'bg-muted text-muted-foreground'
+  return (
+    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}>
+      {status.replace('_', ' ')}
     </span>
   )
 }
@@ -80,6 +102,29 @@ export default async function ContractorsPage({ searchParams }: Props) {
   const tokenByCompany = new Map<string, string>(
     ((rawInvites ?? []) as PendingInvite[]).map((i) => [i.company_id, i.token]),
   )
+
+  // Client Admin sliced worker view: fetch workers for all active linked companies.
+  // RLS "company_memberships: read if member or linked" permits linked client orgs.
+  // We only get invited_email + onboarding_status — full user profiles are gated on
+  // site activation (HowDesign-DataModel §4.2, deferred until M3).
+  const activeCompanyIds = links.filter((l) => l.status === 'active').map((l) => l.company_id)
+  const workersByCompany = new Map<string, WorkerSlice[]>()
+
+  if (activeCompanyIds.length > 0) {
+    const { data: rawWorkers } = await supabase
+      .from('company_memberships')
+      .select('company_id, invited_email, onboarding_status')
+      .in('company_id', activeCompanyIds)
+      .eq('status', 'active')
+      .contains('roles', ['worker'])
+      .order('created_at', { ascending: true })
+
+    for (const w of (rawWorkers ?? []) as WorkerSlice[]) {
+      const arr = workersByCompany.get(w.company_id) ?? []
+      arr.push(w)
+      workersByCompany.set(w.company_id, arr)
+    }
+  }
 
   // Construct the base URL for dev-mode link display
   const hdrs = await headers()
@@ -136,14 +181,16 @@ export default async function ContractorsPage({ searchParams }: Props) {
         {links.length > 0 && (
           <h2 className="text-sm font-medium text-muted-foreground">Linked companies</h2>
         )}
-        <ul className="space-y-2">
+        <ul className="space-y-3">
           {links.length > 0 ? (
             links.map((link) => {
               const co = link.contractor_companies
               const token = tokenByCompany.get(link.company_id)
               const inviteUrl = token ? `${baseUrl}/register/company?token=${token}` : null
+              const workers = workersByCompany.get(link.company_id) ?? []
+
               return (
-                <li key={link.id} className="space-y-2 rounded-lg border bg-card px-4 py-3">
+                <li key={link.id} className="space-y-3 rounded-lg border bg-card px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-medium">{co?.legal_name ?? '—'}</p>
@@ -160,6 +207,29 @@ export default async function ContractorsPage({ searchParams }: Props) {
                         Dev-mode invite link
                       </p>
                       <code className="break-all font-mono text-xs">{inviteUrl}</code>
+                    </div>
+                  )}
+
+                  {/* Client Admin sliced worker view — only shown for active links */}
+                  {isClientAdmin && link.status === 'active' && (
+                    <div className="border-t pt-3">
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">
+                        Workers ({workers.length})
+                      </p>
+                      {workers.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No workers enrolled yet.</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {workers.map((w, i) => (
+                            <li key={i} className="flex items-center justify-between gap-2">
+                              <span className="truncate text-sm text-muted-foreground">
+                                {w.invited_email ?? '—'}
+                              </span>
+                              <OnboardingBadge status={w.onboarding_status} />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   )}
                 </li>

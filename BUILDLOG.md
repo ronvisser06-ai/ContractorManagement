@@ -458,6 +458,34 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Single conversation — fresh conversation before Step 3.
 
+### Session 2026-06-25 — M1 / Step 4b — Worker Registration + Soft-Match Dedup + Client Admin Sliced View
+
+**What I Built**:
+- Migration `0011_claim_worker_invite_rpc.sql`: `claim_worker_invite(p_token, p_claiming_user_id, p_provisional_user_id)` SECURITY DEFINER RPC. Uses `FOR UPDATE` lock on the invitation row to prevent double-accept races. Normal claim path: advances `onboarding_status → account_created`, sets `accepted_user_id`, marks invitation `status = accepted`. Merge path (claiming ≠ provisional): re-points `company_memberships.user_id` to the existing identity (or deletes the duplicate provisional row if the existing user is already a member).
+- `web/src/app/(auth)/register/worker/page.tsx` — three display states: (1) registration form (pre-fills name from provisional auth user metadata; detects existing registered users via `last_sign_in_at` and shows sign-in prompt instead of password-setup to avoid overwriting passwords); (2) `?suggest=<id>` soft-match prompt ("Is this you?") with embedded sign-in form for merge path + "Not me — create my own account" bypass link; (3) invalid/expired/used token error states.
+- `web/src/app/(auth)/register/worker/actions.ts` — two server actions:
+  - `claimWorkerInvite`: validates token (admin client), locates provisional membership by `company_id + invited_email`, soft-match guard (admin queries `users` by exact mobile + ILIKE name, excludes provisional user_id → redirects to `?suggest=<id>` on match), sets password via `admin.auth.admin.updateUserById`, updates `users` row (name + mobile), inserts `user_emails(primary, verified)` idempotently, calls `claim_worker_invite` RPC, signs in via user client, redirects to `/company`. `bypass_soft_match=1` hidden input skips the guard after the worker confirms they're a new identity.
+  - `loginAndMerge`: signs in as the existing user via user client, verifies `auth.uid() == existingUserId` (security check), finds the provisional user_id (different user, same invited_email), calls `claim_worker_invite` RPC (merge path), deletes provisional auth stub via `admin.auth.admin.deleteUser`, redirects to `/company`.
+- `web/src/app/app/contractors/page.tsx` — Client Admin sliced worker view: single batched query for `company_memberships(company_id, invited_email, onboarding_status)` across all active linked companies; RLS `company_memberships: read if member or linked` permits linked client orgs via `org_linked_company_ids()`. Shows worker count + email + onboarding badge under each active company. Full user profiles (names) require site activation bridge (§4.2) — deferred to M3.
+
+**What Went Wrong**:
+- Nothing material — all RLS policies from Steps 1-4a handled the access patterns correctly. No new RLS migrations needed beyond the RPC.
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint`, `npm run build` all clean (`/register/worker` in build output).
+- `npm test` → 60/60 pass (6 new + 54 existing). All new tests exercised from user-JWT clients as required by the Step 4b working agreement.
+
+**What's Next**:
+- **Step 5 — Crew activation, expected-on-site, cross-company view**: `site_company_assignments` (Client Admin assigns linked company to site); `site_worker_activations` (Contractor Admin marks crew active on site); foreman's expected-on-site list; cross-company worker view (§4.4).
+
+**Rules Followed**:
+- ✓ Read M1 brief + HowDesign-DataModel §2, §4.4, §5 before building
+- ✓ One-person-one-identity guaranteed: soft-match redirects before any duplicate is created; merge path deletes the provisional stub after re-pointing
+- ✓ RPC for atomic commit (FOR UPDATE prevents double-accept races)
+- ✓ TypeScript strict + lint + build clean; 60 tests green
+
+**Context Usage**: Single conversation — fresh conversation before Step 5.
+
 ### Session 2026-06-25 — M1 / Step 4a — Worker Enrollment + Invite + Roster (Contractor Admin Side)
 
 **What I Built**:
