@@ -64,6 +64,20 @@
       "when": 1782500000000,
       "tag": "0008_accept_company_invite_rpc",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782586400000,
+      "tag": "0009_worker_roster_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782586800000,
+      "tag": "0010_fix_company_memberships_rls",
+      "breakpoints": true
     }
   ]
 }

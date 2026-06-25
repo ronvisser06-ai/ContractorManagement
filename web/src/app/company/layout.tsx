@@ -51,16 +51,15 @@ export default async function CompanyLayout({ children }: { children: React.Reac
 
         <nav className="mx-auto mt-3 flex max-w-3xl flex-wrap items-center gap-1">
           {isAdmin && (
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/company/profile">Company Profile</Link>
-            </Button>
+            <>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/company/profile">Company Profile</Link>
+              </Button>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/company/workers">Workers</Link>
+              </Button>
+            </>
           )}
-          <span className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm text-muted-foreground/60">
-            Workers
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide">
-              Soon
-            </span>
-          </span>
         </nav>
       </header>
 

@@ -458,6 +458,37 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Single conversation — fresh conversation before Step 3.
 
+### Session 2026-06-25 — M1 / Step 4a — Worker Enrollment + Invite + Roster (Contractor Admin Side)
+
+**What I Built**:
+- Migration `0009_worker_roster_rls.sql`: added `"users: company member reads"` RLS policy on `users` — allows any active company member to read other members' `public.users` profile rows. Required for the roster's embedded `company_memberships → users` join to return non-NULL data for other users (without it, PostgREST applies `id = auth.uid()` to the join and returns NULL for every non-self row).
+- Migration `0010_fix_company_memberships_rls.sql`: discovered that the existing `company_memberships` INSERT and UPDATE policies both directly subquery `company_memberships` within a policy ON `company_memberships`, causing Postgres error 42P17 (infinite recursion). Fixed by adding `user_admin_company_ids(uid)` SECURITY DEFINER helper (same pattern as `user_company_ids`) and rewriting both policies to use it. Without this fix, every `addWorker` and `inviteWorker` server action would fail at runtime.
+- `web/src/app/company/workers/actions.ts` — two server actions:
+  - `addWorker`: validates contractor_admin role; rejects duplicate by `invited_email`; calls `admin.auth.admin.createUser(email_confirm: true, user_metadata)` to create a provisional auth user (no password — worker sets one when they open the Step 4b invite link); `handle_new_user` trigger creates the `public.users` row; updates `mobile` via admin if provided; if the email already exists (future soft-match case), finds the existing `public.users` row by `primary_email`; inserts `company_memberships(worker, entered)` via user client (fixed RLS ✓).
+  - `inviteWorker`: validates contractor_admin role; fetches the specific membership by `membership_id + company_id` (defence-in-depth); requires `onboarding_status='entered'`; creates `invitations(worker, tokenized, 7-day)` via user client; advances membership `onboarding_status` to `invited` via user client (fixed RLS ✓); logs dev-mode link; redirects with `invited_token` for banner display.
+- `web/src/app/company/workers/page.tsx`: roster page — contractor_admin add-worker form (given/family name, email, optional mobile); success/invite banners; worker list with `OnboardingBadge` (entered/invited/logged_in/account_created), dev-mode invite link shown inline for invited workers, "Send invite" button form for `entered` workers.
+- `web/src/app/company/layout.tsx`: promoted Workers from "Soon" placeholder to live nav link (contractor_admin only).
+- `web/src/test/worker-enrollment.test.mts`: 6 RLS integration assertions — admin reads member profile (new policy), admin INSERT membership, admin UPDATE onboarding_status, admin INSERT invitation, plain worker blocked on membership INSERT, plain worker blocked on invitation INSERT.
+
+**What Went Wrong**:
+- `company_memberships: insert if contractor_admin` and `company_memberships: update if contractor_admin` both directly subquery `company_memberships` within a policy on the same table. Postgres detects this as potential infinite recursion (42P17) at runtime. These policies were never exercised via a user-JWT client before — Step 3's `accept_company_invite` is SECURITY DEFINER (bypasses RLS) and `updateCompanyProfile` writes to `contractor_companies`, not `company_memberships`. Fixed with `user_admin_company_ids()` SECURITY DEFINER helper + policy rewrite (migration 0010).
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint`, `npm run build` all clean.
+- `npm test` → 54/54 pass (6 new + 48 existing, unaffected).
+
+**What's Next**:
+- **Step 4b — Worker registration + soft-match**: worker opens the invite link → registration form with soft-match guard (mobile + name → "is this you? sign in instead") → if new: set password on provisional auth user; update `onboarding_status` to `account_created`.
+
+**Rules Followed**:
+- ✓ Read `M1-ContractorCRM-Brief.md` Step 4 + working agreement, `HowDesign-DataModel.md` §3.3–3.4 before building (Rules 1, 2)
+- ✓ One step only — NO worker registration, NO soft-match (that's Step 4b)
+- ✓ RLS bug caught by the test (not by manual testing) and fixed before commit — same-migration fix pattern
+- ✓ TypeScript strict, lint, and build all clean; 54 tests green
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Single conversation — fresh conversation before Step 4b.
+
 ### Session 2026-06-25 — M1 / Step 3 — Company Registration + Profile from Invite Link
 
 **What I Built**:
