@@ -582,6 +582,42 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Single conversation — fresh conversation before Step 2.
 
+### Session 2026-06-25 — M1 / Step 5a — Site↔Company Assignment + Worker Activation (Write Side)
+
+**What I Built**:
+- Migration `0012_sites_read_for_contractor.sql`: `site_ids_for_company(uid)` SECURITY DEFINER helper + `"sites: read if company assigned"` RLS policy. Without this, contractor_admins could not read site names/details for sites their company is assigned to (the existing `"sites: read if org member"` policy only covers client-side users who have `org_memberships`, not contractor-side users). The SECURITY DEFINER helper is required to avoid a circular reference: a naïve policy reading from `site_company_assignments` would recurse because `site_company_assignments`' SELECT policy itself reads from `sites`.
+- `web/src/app/app/sites/actions.ts` — two new actions:
+  - `assignCompany`: validates caller is client_admin; fetches org_id from their membership; validates active `client_company_links` (org↔company link — business logic check, not in RLS); upserts `site_company_assignments` (re-activates removed row if exists, otherwise inserts). RLS `"site_company_asgn: write if client_admin"` enforces site→org ownership at the DB level.
+  - `removeAssignment`: updates `status='removed'` on a named assignment row; RLS enforces org ownership.
+- `web/src/app/app/sites/page.tsx`: extended the sites list — each site card now shows an "Assigned companies" section (client_admin only) with active assignments and a "Remove" button form per company, plus a select dropdown of linked-but-not-yet-assigned companies + "Assign" button.
+- `web/src/app/company/crew/actions.ts` — two new actions:
+  - `activateWorker`: validates contractor_admin; validates site_company_assignments has active row for (site, company) — business logic gate; validates worker is an active member of the company; upserts `site_worker_activations`. RLS `"site_worker_act: write if contractor_admin"` enforces company ownership at the DB level.
+  - `deactivateWorker`: updates `status='removed'`; includes `.eq('company_id', companyId)` as defence-in-depth alongside RLS.
+- `web/src/app/company/crew/page.tsx`: new crew activation page for contractor_admin — fetches assigned sites (via `site_company_assignments` + embedded `sites` join, enabled by migration 0012), company workers (via `company_memberships` + embedded `users` join), and current activations. Per site: shows each worker with their activation status + Activate/Deactivate toggle form.
+- `web/src/app/company/layout.tsx`: added "Crew" nav link for contractor_admin alongside "Company Profile" and "Workers".
+- `web/src/test/crew-activation.test.mts`: 6 RLS integration tests from user-JWT clients — client_admin INSERT assignment succeeds; client_admin UPDATE to removed succeeds; unrelated client blocked on wrong-org site INSERT; contractor_admin INSERT activation succeeds; wrong-company contractor blocked from pretending to be another company; contractor_admin can read assigned sites via new migration 0012 policy.
+
+**What Went Wrong**:
+- Nothing material. The potential circular RLS reference (`sites` ↔ `site_company_assignments`) was caught during planning and neutralized with the SECURITY DEFINER helper before writing any code.
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint`, `npm run build` all clean (`/company/crew` in build output as `ƒ`).
+- `npm test` → 66/66 pass (6 new + 60 existing, unaffected).
+- Migration applied via `npm run db:migrate` — applied cleanly.
+
+**What's Next**:
+- **Step 5b — Read side**: expected-on-site view (foreman sees which companies + workers are expected at their site) and cross-company summary (client_admin sees combined crew picture across all linked companies on a site). Deferred from Step 5a per the split agreement.
+
+**Rules Followed**:
+- ✓ Read `M1-ContractorCRM-Brief.md` Step 5 + `HowDesign-DataModel.md` §3.4 before building (Rules 1, 2)
+- ✓ Write side only — no expected-on-site view, no cross-company summary (that's Step 5b)
+- ✓ Migration 0012 required and included — not assumed to be doable without it (contractor site-read was blocked without it)
+- ✓ Both business-logic gates (link check + site-assignment check) enforced in actions; RLS enforces ownership separately — defence in depth
+- ✓ TypeScript strict, lint, and build all clean; 66 tests green
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Resumed from context-compacted session (Step 5a never got started in prior session) — fresh conversation before Step 5b.
+
 ---
 
 ## Track Progress

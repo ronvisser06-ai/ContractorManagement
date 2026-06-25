@@ -58,6 +58,9 @@ export default async function CompanyLayout({ children }: { children: React.Reac
               <Button asChild variant="ghost" size="sm">
                 <Link href="/company/workers">Workers</Link>
               </Button>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/company/crew">Crew</Link>
+              </Button>
             </>
           )}
         </nav>
