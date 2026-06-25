@@ -458,6 +458,42 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Single conversation — fresh conversation before Step 3.
 
+### Session 2026-06-25 — M1 / Step 3 — Company Registration + Profile from Invite Link
+
+**What I Built**:
+- Migration `0008_accept_company_invite_rpc.sql` (pure SQL, manually journalled): `accept_company_invite(p_token, p_user_id, p_membership_id, p_legal_name)` SECURITY DEFINER RPC — `FOR UPDATE` lock on the invitation prevents double-accept races; validates token/status/expiry/user existence atomically; UPDATEs the stub `contractor_companies` row (created at invite time in Step 2) with the real legal name; INSERTs a `company_memberships` row (`contractor_admin`, `active`, `account_created`) with `ON CONFLICT DO NOTHING` for idempotency; flips `client_company_links` to `active`; marks the invitation consumed. Accepts `p_user_id` explicitly (not `auth.uid()`) so the action works whether email confirmation is ON or OFF.
+- `web/src/app/(auth)/register/company/page.tsx` + `actions.ts`: invite landing page validates the token server-side (admin client) before rendering the form; shows typed errors for invalid/expired/used tokens. `registerFromCompanyInvite` action: validates inputs → defensive re-validates token → `supabase.auth.signUp()` → `admin.rpc('accept_company_invite', …)` → on RPC failure, rolls back the auth user (`admin.auth.admin.deleteUser`) so the token stays reusable → redirects to `/company/profile` (session present) or `/register/company?registered=1` (email confirmation pending).
+- `web/src/app/company/layout.tsx`: contractor company portal shell. Reads `company_memberships` (RLS-filtered) to authenticate the contractor admin; redirects to `/login` if no membership; renders the company name, role badge, a "Company Profile" nav link, and a "Workers — Soon" placeholder.
+- `web/src/app/company/page.tsx`: redirect to `/company/profile`.
+- `web/src/app/company/profile/page.tsx` + `actions.ts`: profile form for contractor admins — legal name (required), trade types (comma-separated text[]), contact name, contact phone. Contact email displayed read-only (set at invite time). Logo upload stubbed with a "coming in a future update" notice. `updateCompanyProfile` action enforces the contractor_admin role check at the app layer; the underlying `UPDATE` RLS policy enforces it at the DB layer.
+- `web/src/app/app/layout.tsx`: before redirecting to `/onboarding/create-org`, checks `company_memberships` — if the user is a contractor admin with no org membership, redirects to `/company` instead.
+- `web/src/middleware.ts`: guards `/company/*` routes (redirect to `/login` if unauthenticated).
+- `src/test/accept-company-invite.test.mts`: 5 RPC integration tests — invalid token rejected, expired token rejected, blank legal name rejected, valid acceptance (company updated, membership created, link activated, invite consumed), re-use of accepted token rejected.
+
+**What Went Wrong**:
+- Seed used `status: 'invited'` for `contractor_companies` — `userStatusEnum` only has `'active'|'disabled'`; `'invited'` lives on `client_company_links`. Removed the field (default `'active'` applies).
+- Seed used `slug` column on `organizations` — no such column. Removed.
+- Seed used `invited_by` — the column is `created_by`. Fixed.
+- Test imported from `ulidx` — the project uses `ulid`. Fixed.
+- `.next/types/routes.ts` was stale (built before `/company` existed) — running `next build` regenerated it and cleared the tsc error.
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint`, `npm run build` all clean.
+- `npm test` → 48/48 pass (5 new RPC tests + 43 existing, unaffected).
+
+**What's Next**:
+- **Step 4 — Worker enrollment, invite, soft-match registration, lifecycle**: worker invite form (Contractor Admin → worker email/phone), worker registration with soft-match against existing auth users, `site_worker_activations` lifecycle.
+
+**Rules Followed**:
+- ✓ Read `M1-ContractorCRM-Brief.md` Step 3 + working agreement, `HowDesign-DataModel.md` §3.3 + §5 before building (Rules 1, 2)
+- ✓ One step only — no worker enrollment, no SMS, no email delivery (those are later steps)
+- ✓ SECURITY DEFINER RPC for the atomic multi-table accept (same pattern as `create_organization`)
+- ✓ Auth user rollback on RPC failure (prevents orphaned auth users from consuming the invite token)
+- ✓ TypeScript strict, lint, and build all clean; 48 tests green
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Resumed from context-compacted session; single continued conversation — fresh conversation before Step 4.
+
 ### Session 2026-06-25 — M1 / Step 1 — Contractor + Bridge Schema + Relationship-Derived RLS
 
 **What I Built**:

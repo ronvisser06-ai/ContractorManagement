@@ -51,7 +51,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq('status', 'active')
     .maybeSingle()
 
-  if (!membership) redirect('/onboarding/create-org')
+  if (!membership) {
+    // A contractor admin has company_memberships but no org_memberships.
+    // Route them to the company portal instead of asking them to create an org.
+    const { data: companyMembership } = await supabase
+      .from('company_memberships')
+      .select('company_id')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle()
+
+    redirect(companyMembership ? '/company' : '/onboarding/create-org')
+  }
 
   const roles = membership.roles as OrgRole[]
 
