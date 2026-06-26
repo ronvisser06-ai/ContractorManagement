@@ -3,38 +3,11 @@ import { inngest } from '../client'
 import { generationJobStart } from '../events'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { callStructure, STRUCTURE_MODEL, STRUCTURE_STAGE_VERSION } from '@/lib/pipeline/structure'
-import type { ArtifactRef, JobRecord, QAHistoryEntry, SourceAsset } from '@/contracts/types'
+import { callQuiz, QUIZ_MODEL, QUIZ_STAGE_VERSION } from '@/lib/pipeline/quiz'
+import type { ArtifactRef, ContentModel, JobRecord, QAHistoryEntry, SourceAsset } from '@/contracts/types'
 
 const ARTIFACTS_BUCKET = 'pipeline-artifacts'
 const SIGNED_URL_TTL_SECONDS = 300
-
-// Canned Quiz for the still-stubbed generating_quiz stage (real AI quiz is M2 Step 2).
-// Cites blk_stub_03 from the old canned model — once the real structure stage runs,
-// the quiz stub's source_refs won't align, but the orchestration flow still proves out.
-function buildCannedQuiz(): Record<string, unknown> {
-  return {
-    meta: { pass_threshold: 0.8, attempts_allowed: 3, shuffle_questions: false, shuffle_options: false, question_count: 1 },
-    questions: [
-      {
-        id: 'q_stub_01',
-        module_id: 'mod_stub_01',
-        objective_id: 'obj_stub_01',
-        source_refs: ['blk_stub_03'],
-        type: 'single_choice',
-        difficulty: 'recall',
-        stem: 'What is the primary control for slips, trips, and falls on this site?',
-        options: [
-          { id: 'opt_a', text: 'Keep walkways clear and report spills immediately' },
-          { id: 'opt_b', text: 'Wear a hard hat at all times' },
-          { id: 'opt_c', text: 'Avoid the site entirely' },
-        ],
-        correct_option_ids: ['opt_a'],
-        rationale: 'Per blk_stub_03, clear walkways and prompt spill reporting are the stated administrative control.',
-      },
-    ],
-    coverage_map: { obj_stub_01: ['q_stub_01'] },
-  }
-}
 
 function buildEnvelope(
   jobId: string,
@@ -159,11 +132,36 @@ async function loadExtractedDeck(
   return { deck: envelope.payload, ref }
 }
 
+async function loadContentModel(
+  supabase: ReturnType<typeof createAdminClient>,
+  jobId: string,
+): Promise<{ contentModel: ContentModel; ref: ArtifactRef }> {
+  const { data: jobData, error: jobErr } = await supabase
+    .from('generation_jobs')
+    .select('artifacts')
+    .eq('id', jobId)
+    .single()
+  if (jobErr) throw jobErr
+
+  const artifacts = jobData.artifacts as JobRecord['artifacts']
+  const ref = artifacts.content_model
+  if (!ref) throw new Error('content_model artifact missing — cannot run generate_quiz stage')
+
+  const { data: blob, error: dlErr } = await supabase.storage
+    .from(ARTIFACTS_BUCKET)
+    .download(ref.storage_key)
+  if (dlErr) throw dlErr
+
+  const envelope = JSON.parse(await blob.text()) as { payload: ContentModel }
+  return { contentModel: envelope.payload, ref }
+}
+
 // Walks a job through queued → extracting → structuring → generating_quiz →
 // qa_review → awaiting_approval (contracts §1).
 // extracting: real deterministic parse (M0 Step 3)
 // structuring: real Sonnet call (M2 Step 1)
-// generating_quiz / qa_review: stubbed canned envelopes until M2 Steps 2–3
+// generating_quiz: real Sonnet call (M2 Step 2)
+// qa_review: stubbed canned envelope until M2 Step 3
 export const runGenerationJob = inngest.createFunction(
   { id: 'run-generation-job', triggers: [generationJobStart] },
   async ({ event, step }) => {
@@ -209,7 +207,7 @@ export const runGenerationJob = inngest.createFunction(
       await storeArtifact(supabase, jobId, siteId, 'content_model', envelope)
     })
 
-    // ── Generating quiz (stubbed — M2 Step 2) ─────────────────────────────
+    // ── Generating quiz (real Sonnet — M2 Step 2) ─────────────────────────
     await step.run('enter-generating_quiz', async () => {
       const { error } = await supabase
         .from('generation_jobs')
@@ -218,10 +216,15 @@ export const runGenerationJob = inngest.createFunction(
       if (error) throw error
     })
 
-    await step.sleep('pace-generating_quiz', '2s')
-
     await step.run('produce-generating_quiz', async () => {
-      const envelope = buildEnvelope(jobId, 'generating_quiz', buildCannedQuiz())
+      const { contentModel, ref: contentModelRef } = await loadContentModel(supabase, jobId)
+      const quiz = await callQuiz(contentModel, jobId, siteId)
+      const envelope = buildEnvelope(jobId, 'generating_quiz', quiz as unknown as Record<string, unknown>, {
+        stageImplVersion: QUIZ_STAGE_VERSION,
+        inputRefs: { content_model_sha256: contentModelRef.sha256 },
+        kind: 'llm',
+        model: QUIZ_MODEL,
+      })
       await storeArtifact(supabase, jobId, siteId, 'quiz', envelope)
     })
 

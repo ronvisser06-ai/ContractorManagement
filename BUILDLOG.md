@@ -763,6 +763,39 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Resumed from context-compacted session — fresh conversation for M2 Step 2.
 
+### Session 2026-06-26 — M2 / Step 2 — Real `generate_quiz` Stage + Eval Harness
+
+**What I Built**:
+- `web/src/lib/pipeline/quiz.ts`: real Sonnet quiz stage. `QUIZ_MODEL = 'claude-sonnet-4-6'`, `QUIZ_STAGE_VERSION = 'generate_quiz@1.0.0'`. `formatContentModelForPrompt(cm)` renders each module's objectives and blocks as compact labelled text (block ids, types, text content, hazard controls) so the model can accurately cite `source_refs`. `callQuiz(contentModel, jobId, siteId) → Quiz`: calls Sonnet with `max_tokens: 6000`, strips code fences, parses JSON, validates via `validateAndRepairQuiz`. Validator checks: `meta` shape, `source_refs` non-empty and resolve to real block ids, options ≥2 with unique ids, `correct_option_ids` reference real option ids, `rationale` present. Repairs: normalizes `multiple_choice → multi_choice` (model alias); derives `coverage_map` from questions when model omitted it (keys: objective_id + hazard block_ids from `source_refs`); fixes `question_count` to match actual questions length.
+- `web/src/lib/inngest/functions/run-generation-job.ts`: removed `buildCannedQuiz` stub + `pace-generating_quiz` sleep. Added `loadContentModel()` helper (same pattern as `loadExtractedDeck` — fetches job artifacts, downloads content_model from Supabase storage, parses envelope). `produce-generating_quiz` now calls `callQuiz(contentModel, jobId, siteId)`, wraps output in stage envelope with `kind: 'llm'`, stores to `quiz` artifact. `qa_review` remains stubbed (M2 Step 3).
+- `web/src/test/pipeline-quiz.test.mts`: 4-test eval harness. `assertQuizProperties` checks: meta fields (pass_threshold, attempts_allowed, shuffle booleans, question_count == questions.length), every question (type in allowed set, source_refs non-empty + resolve to real blocks, ≥2 options, correct_option_ids valid, rationale present), coverage_map covers every objective_id, every hazard block_id from hazard_index is cited by ≥1 question's source_refs. Tests: (1) golden Proton quiz property checks (no API call); (2) Proton ContentModel → live Quiz + saves `golden/proton-quiz.json`; (3) synthetic hazard ContentModel → hazard block cited in source_refs; (4) synthetic minimal ContentModel → ≥1 question covering the objective.
+
+**What Went Wrong**:
+- Proton quiz live test: model returned `type: "multiple_choice"` on one question. Fixed by normalizing `multiple_choice → multi_choice` (and `true/false → true_false`) in `validateAndRepairQuiz` before the type check. Also added an explicit type validation error (rather than silently accepting unknown types) so new aliases surface clearly.
+
+**Verified**:
+- `tsc --noEmit` → 0 errors.
+- `npm run lint` → 0 errors (4 pre-existing warnings in unrelated health route).
+- `npm run build` → clean.
+- `npm test` → **82/82 pass** (4 new quiz eval + 4 structure eval + 74 existing, 0 skipped, 0 failed).
+  - Proton ContentModel → conforming Quiz in ~43s, all 7 objectives covered, hazard block cited ✓
+  - Synthetic hazard CM → quiz covers `blk_01_01` (critical fall hazard) in source_refs ✓
+  - Synthetic minimal CM → ≥1 question per objective ✓
+  - Golden quiz fixture property-check test passes from saved JSON ✓
+- `golden/proton-quiz.json` committed.
+
+**What's Next**:
+- **M2 Step 3 — Real `qa_review` evaluator + bounded rework loop**: replace QA stub with a stronger/Opus-class Sonnet call producing a `QAVerdict` (coverage/correctness/fidelity scores, issues with severity + target_stage + target_ref, routed_to). Wire bounded loop: `needs_rework + rework_count < max` → re-enter structure or generate_quiz; on exhaustion → advance to `awaiting_approval` with `qa_flagged=true`. Eval: golden verdicts on Proton deck + synthetic deck with seeded wrong answer that QA must flag; prove loop terminates.
+
+**Rules Followed**:
+- ✓ Read `M2-GenerationPipeline-Brief.md` Step 2 + working agreement, `orientation_pipeline_contracts_v0.1.md` §4.4 before building (Rules 1, 2)
+- ✓ One step only — qa_review stub untouched (M2 Step 3)
+- ✓ source_refs validation enforces traceability to real block ids — model cannot cite phantom blocks
+- ✓ Dev fallback: `ANTHROPIC_API_KEY` absent → tests skip cleanly; `callQuiz` throws immediately (Inngest retries)
+- ✓ TypeScript strict, lint, and build all clean; 82/82 green
+
+**Context Usage**: Single conversation — fresh conversation for M2 Step 3.
+
 ---
 
 ## Track Progress
