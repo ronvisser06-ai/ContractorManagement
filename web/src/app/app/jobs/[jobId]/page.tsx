@@ -44,7 +44,7 @@ export default async function JobPage({ params, searchParams }: Props) {
 
   if (!job) notFound()
 
-  let review: { contentModel: ContentModel; quiz: Quiz; canApprove: boolean } | null = null
+  let review: { contentModel: ContentModel; quiz: Quiz; canApprove: boolean; canEdit: boolean } | null = null
 
   if (job.status === 'awaiting_approval') {
     const artifacts = job.artifacts as JobRecord['artifacts']
@@ -65,8 +65,12 @@ export default async function JobPage({ params, searchParams }: Props) {
         .eq('status', 'active')
         .maybeSingle()
 
-      const canApprove = ((membership?.roles as string[] | undefined) ?? []).includes('content_approver')
-      review = { contentModel, quiz, canApprove }
+      const roles = (membership?.roles as string[] | undefined) ?? []
+      const canApprove = roles.includes('content_approver')
+      const canEdit = roles.some((r) =>
+        ['content_developer', 'content_approver', 'client_admin'].includes(r),
+      )
+      review = { contentModel, quiz, canApprove, canEdit }
     }
   }
 
@@ -86,6 +90,7 @@ export default async function JobPage({ params, searchParams }: Props) {
           quiz={review.quiz}
           qaFlagged={job.qa_flagged}
           canApprove={review.canApprove}
+          canEdit={review.canEdit}
         />
       )}
     </div>

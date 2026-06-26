@@ -860,6 +860,34 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Resumed from context-compacted session — fresh conversation for Step 4.
 
+### Session 2026-06-26 — M2 / Step 4a — Bounded Content-Model Editor
+
+**What I Built**:
+- `web/src/app/app/jobs/[jobId]/content-model-editor.tsx` (NEW, `'use client'`): bounded ContentModel block editor implementing contracts §7. View mode shows the existing `ContentModelView` with an "Edit content" button for eligible roles. Edit mode shows per-module, per-block inline editors for all 9 block types. Supported operations: edit all type-specific text fields (heading level+text; paragraph/key_point text; callout variant+title+text; list ordered+items; hazard hazard+description+severity+controls[]; image/video asset_id+alt+caption; table headers+rows); reorder modules and blocks (up/down buttons); delete module (with confirm dialog) or block; insert a block from the closed block-type set (type selector → default scaffold → committed at chosen slot). New block IDs are `blk_human_${random}`, `source_ref = { slide_index: 0 }` (§7 placeholder). Cancel reverts all changes to last saved state. Save runs client-side `validateBlock` first, shows inline errors per block, then calls `saveContentModelEdits`. No drag-and-drop, no fonts/colors, no raw HTML, no new block types — §7 EXCLUDED list enforced.
+- `web/src/app/app/jobs/[jobId]/actions.ts`: added `saveContentModelEdits(jobId, contentModel)` server action. Auth checks user session; fetches job `org_id/site_id/status`; checks membership roles (`content_developer | content_approver | client_admin`); guards `status === 'awaiting_approval'`; validates every block server-side with `validateBlock` (same closed-set gate as the renderer — double validation); builds `produced_by.kind='human'` envelope with `editor: user.id` and `stage_impl_version: 'structuring@human-edit-1.0'`; uploads to same storage key (`sites/${site_id}/jobs/${job_id}/artifacts/content_model.json`) with upsert; updates `artifacts.content_model` ref in DB with new `sha256` and `produced_at`.
+- `web/src/app/app/jobs/[jobId]/approval-review.tsx`: added `canEdit: boolean` prop; replaced static `ContentModelView` section with `<ContentModelEditor>` client component (server component rendering a client component — correct Next.js pattern).
+- `web/src/app/app/jobs/[jobId]/page.tsx`: added `canEdit` to the review object type; computes `canEdit = roles.some(r => ['content_developer','content_approver','client_admin'].includes(r))` from the existing membership query; passes it to `ApprovalReview` and on to the editor.
+
+**What Went Wrong**: Nothing.
+
+**Verified**:
+- `tsc --noEmit` → 0 errors.
+- `npm run lint` → 0 errors (4 pre-existing warnings in unrelated health route).
+- `npm run build` → clean, all routes resolve, no new bundle warnings.
+
+**What's Next**:
+- **M2 Step 4b — Quiz editing + requalification policy + publish-from-edited**: Add quiz editor (question text, options, correct answer, rationale), pass_threshold/attempts_allowed selectors, shuffle toggles, and verify the existing approve+publish path still works with human-edited CM (it does — the path reads from storage, not from the edit UI). Set requalification_policy in the approve form (already partially wired in M0 skeleton).
+
+**Rules Followed**:
+- ✓ Read contracts §7 (bounded editor scope), §4.2/§4.3 (ContentModel, closed block set) before building
+- ✓ One sub-step only — quiz editing deferred to Step 4b (Rule 6)
+- ✓ Validation runs both client-side (UX) and server-side in the action (real gate)
+- ✓ Block `id` and `source_ref` preserved on all edit/update operations — §7 invariant holds
+- ✓ `produced_by.kind='human'` envelope correctly distinguishes human edits in artifact audit trail
+- ✓ Mobile-first layout (wrap, gap-2/gap-3, compact buttons)
+
+**Context Usage**: Continued from context-compacted M2 Step 3b session.
+
 ---
 
 ## Track Progress
