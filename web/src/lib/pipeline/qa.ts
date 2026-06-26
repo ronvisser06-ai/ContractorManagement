@@ -316,18 +316,20 @@ function validateAndRepairVerdict(raw: unknown, reworkCount: number, maxRework: 
   // If verdict=pass, routed_to must be none
   if (r.verdict === 'pass') r.routed_to = 'none'
 
-  // Derive decision from verdict + rework budget (orchestrator owns this, not model)
-  let decision: 'proceed' | 'rework' | 'escalate'
-  if (r.verdict === 'pass') {
-    decision = 'proceed'
-  } else if (reworkCount < maxRework) {
-    decision = 'rework'
-  } else {
-    decision = 'escalate'
-  }
-  r.decision = decision
+  r.decision = deriveReworkDecision(r.verdict as 'pass' | 'needs_rework', reworkCount, maxRework)
   r.rework_count = reworkCount
   r.max_rework = maxRework
 
   return r as unknown as QAVerdict
+}
+
+// Pure routing function — exported so the orchestrator and tests can verify
+// the decision logic without making API calls.
+export function deriveReworkDecision(
+  verdict: 'pass' | 'needs_rework',
+  reworkCount: number,
+  maxRework: number,
+): 'proceed' | 'rework' | 'escalate' {
+  if (verdict === 'pass') return 'proceed'
+  return reworkCount < maxRework ? 'rework' : 'escalate'
 }

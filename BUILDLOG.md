@@ -832,6 +832,34 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Resumed from context-compacted session — fresh conversation for Step 3b.
 
+### Session 2026-06-26 — M2 / Step 3b — Bounded QA Rework Loop
+
+**What I Built**:
+- `web/src/lib/inngest/functions/run-generation-job.ts`: replaced the single `enter-qa_review` + `produce-qa_review` pair with a bounded `for (qaCycle = 0; qaCycle <= maxRework; qaCycle++)` loop. Each cycle gets a unique Inngest step ID (`produce-qa_review-${qaCycle}`, `enter-qa_review-${qaCycle}`) so Inngest memoizes each cycle independently across replays. The step now returns `{ verdict, routed_to, decision }` so the outer loop can route without a DB round-trip. Orchestrator routing (contracts §1): `verdict=pass` → break; `decision=escalate` → set `qaFlagged=true`, break; `decision=rework` → `increment-rework-${qaCycle}` step increments DB `rework_count`, then re-runs `produce-structuring-rework-${qaCycle}` (only if `routed_to=structure`) and `produce-generating_quiz-rework-${qaCycle}` (always — it's downstream of structure). `enter-awaiting_approval` sets `qa_flagged` from the `qaFlagged` variable. The loop is bounded by the `for` condition (`qaCycle <= maxRework`) and by `validateAndRepairVerdict` returning `decision=escalate` when `rework_count >= max_rework` — double-bounded, impossible to run forever.
+- `web/src/lib/pipeline/qa.ts`: extracted `deriveReworkDecision(verdict, reworkCount, maxRework) → proceed|rework|escalate` as a pure exported function. `validateAndRepairVerdict` now delegates to it instead of inlining the same logic. Exported so the eval harness can prove the routing rules without API calls.
+- `web/src/test/pipeline-qa-loop.test.mts`: 6-test eval harness covering all three eval scenarios: (a) routing decision unit tests (3 tests, 0 API calls — prove pass→proceed, within-budget→rework, exhausted→escalate at boundary values); (b) termination proof (1 test, 0 API calls — simulates worst-case all-needs_rework loop across max_rework ∈ {0,1,2,3,5}, proves exactly max_rework rework steps and then escalates); (c) live API tests (2 tests, 2 Opus calls — escalate at budget exhaustion with max_rework=2, rework within budget with rework_count=1/max_rework=3). Uses the synthetic wrong-answer deck from Step 3a to control cost.
+
+**What Went Wrong**: Nothing.
+
+**Verified**:
+- `tsc --noEmit` → 0 errors.
+- `npm run lint` → 0 errors (4 pre-existing warnings in unrelated health route).
+- `npm run build` → clean.
+- `npm test` → **89 pass, 0 fail, 2 skipped** (2 golden checks correctly skip with API key). 6 new loop eval tests + 83 existing. All new tests pass including both live Opus calls.
+
+**What's Next**:
+- **M2 Step 4 — Bounded approval editor**: at `awaiting_approval`, a block-level editor operating on the ContentModel/Quiz JSON. Allowed: edit block text, reorder/delete blocks + modules, insert block from closed set, edit question, add/remove question, toggle shuffle, set pass_threshold/attempts_allowed, resolve qa_flagged issues, set requalification_policy. Excluded: free-form canvas, new block types, raw HTML. Edits produce `produced_by.kind="human"` envelope, re-run schema validation, then advance to publishing.
+
+**Rules Followed**:
+- ✓ Read M2-GenerationPipeline-Brief.md Step 3 + contracts §1/§4.5 before building (Rules 1, 2)
+- ✓ One sub-step only — approval editor deferred to Step 4
+- ✓ Termination is mathematically guaranteed by the `for` bound + `decision=escalate` break — no unbounded loop possible
+- ✓ Orchestrator owns all routing decisions; model only returns the verdict
+- ✓ Debug on synthetic deck (2 Opus calls total) — Proton not re-run
+- ✓ TypeScript strict, lint, and build all clean; 89/91 green (2 correct skips)
+
+**Context Usage**: Resumed from context-compacted session — fresh conversation for Step 4.
+
 ---
 
 ## Track Progress
