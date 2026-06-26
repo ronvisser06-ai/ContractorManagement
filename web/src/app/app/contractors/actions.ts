@@ -1,10 +1,12 @@
 'use server'
 
 import { randomBytes } from 'node:crypto'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { newId } from '@/db/utils'
+import { sendEmail, companyInviteEmail } from '@/lib/email/send'
 
 export async function inviteContractorCompany(formData: FormData) {
   const supabase = await createClient()
@@ -92,9 +94,23 @@ export async function inviteContractorCompany(formData: FormData) {
     redirect(`/app/contractors?error=${encodeURIComponent(invErr.message)}`)
   }
 
-  // Dev-mode: log the link; it is also shown in the UI via invite_token searchParam.
-  // Step 7 (Resend) replaces this with a real email delivery.
-  console.log(`[DEV] Company invite for ${contactEmail}: /register/company?token=${token}`)
+  const hdrs = await headers()
+  const host = hdrs.get('host') ?? 'localhost:3000'
+  const proto = host.startsWith('localhost') || /^\d+\.\d/.test(host) ? 'http' : 'https'
+  const link = `${proto}://${host}/register/company?token=${token}`
 
-  redirect(`/app/contractors?invite_token=${token}`)
+  const { html, text } = companyInviteEmail(link)
+  const result = await sendEmail({
+    to: contactEmail,
+    subject: "You've been invited to register as a contractor company",
+    html,
+    text,
+  })
+
+  if (result.sent) {
+    redirect('/app/contractors?invited=1')
+  } else {
+    console.log(`[DEV] Company invite for ${contactEmail}: ${link}`)
+    redirect(`/app/contractors?invite_token=${token}`)
+  }
 }

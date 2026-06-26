@@ -683,6 +683,43 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Resumed from context-compacted session — fresh conversation for Step 7.
 
+### Session 2026-06-25 — M1 / Step 7 — Real Email Delivery via Resend
+
+**What I Built**:
+- `web/src/lib/email/send.ts`: `sendEmail(opts)` helper — lazy-instantiates `Resend` from `RESEND_API_KEY`; if the key is absent returns `{ sent: false }` (dev fallback, no network call). `FROM` defaults to `onboarding@resend.dev` (Resend test sender) but respects `RESEND_FROM` env override. Three thin template functions: `companyInviteEmail`, `workerInviteEmail`, `emailVerificationEmail` — each returns `{ html, text }`.
+- `web/src/app/app/contractors/actions.ts` (`inviteContractorCompany`): builds the registration link from `headers()`, calls `sendEmail`. If sent → redirects to `?invited=1` (no token in URL). If dev mode → logs + redirects with `?invite_token=<token>` as before.
+- `web/src/app/company/workers/actions.ts` (`inviteWorker`): same pattern — sends real email if key present, else dev-mode log + redirect with token.
+- `web/src/app/account/profile/actions.ts` (`requestEmailVerification`): same pattern — sends real verification email if key present, else redirects to `?verify_token=…&verify_email=…` as before.
+- Page updates (three pages):
+  - `contractors/page.tsx`: added `?invited=1` searchParam handling → "Invite sent by email" success banner. Per-company dev-mode inline invite links now gated by `!RESEND_API_KEY` (`isDevMode`) — hidden when real email is configured.
+  - `workers/page.tsx`: added `?invited=1` → "Invite sent by email" banner. Per-worker dev inline links also gated by `isDevMode`.
+  - `account/profile/page.tsx`: added `?email_sent=<email>` → "Verification email sent to {email}" banner. Dev-mode link banner kept for `?verify_token` (local dev without key still works).
+
+**What Went Wrong**: Nothing — clean on first pass.
+
+**Env vars to add** (locally in `.env.local`, in Vercel project settings):
+- `RESEND_API_KEY` — from https://resend.com/api-keys
+- `RESEND_FROM` — verified sender address (e.g. `noreply@yourdomain.com`); omit to default to `onboarding@resend.dev` (Resend test sender, only delivers to the account owner's email)
+
+**Dev fallback**: When `RESEND_API_KEY` is absent (local dev, CI), all three flows work exactly as Steps 2–6 — the dev-mode link appears in the UI or console and no network call is made.
+
+**Verified**:
+- `npm run lint` → 0 errors, 4 pre-existing warnings (unchanged).
+- `npm run build` → clean; no new routes, no new type errors.
+
+**What's Next**:
+- **M1 is complete** — all seven steps done; email delivery live. Move to M2 — Generation Pipeline + bounded Approval Editor.
+- **Before M2**: set up the Resend account, verify a sender domain (or use the test sender for pilot), add `RESEND_API_KEY` + `RESEND_FROM` to `.env.local` and Vercel.
+- **Parked**: re-enable Supabase Auth email confirmation (for signup) — deferred to pre-pilot.
+
+**Rules Followed**:
+- ✓ Read `M1-ContractorCRM-Brief.md` Step 7 before building (Rules 1, 2)
+- ✓ One step only — Supabase auth email confirmation untouched, no extra features
+- ✓ Dev fallback first — local dev never breaks when Resend key is absent
+- ✓ TypeScript strict, lint, and build all clean
+
+**Context Usage**: Resumed from context-compacted session — M1 complete.
+
 ---
 
 ## Track Progress

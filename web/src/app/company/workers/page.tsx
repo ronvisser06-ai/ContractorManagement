@@ -11,6 +11,7 @@ interface Props {
     error?: string
     added?: string
     invited_token?: string
+    invited?: string
   }>
 }
 
@@ -93,13 +94,15 @@ export default async function WorkersPage({ searchParams }: Props) {
     ((rawInvites ?? []) as WorkerInvite[]).map((i) => [i.email, i.token]),
   )
 
+  const isDevMode = !process.env.RESEND_API_KEY
+
   // Build the base URL for dev-mode link display.
   const hdrs = await headers()
   const host = hdrs.get('host') ?? 'localhost:3000'
   const proto = host.startsWith('localhost') || /^\d+\.\d/.test(host) ? 'http' : 'https'
   const baseUrl = `${proto}://${host}`
 
-  const { error, added, invited_token: newToken } = await searchParams
+  const { error, added, invited_token: newToken, invited } = await searchParams
   const newInviteUrl = newToken ? `${baseUrl}/register/worker?token=${newToken}` : null
 
   return (
@@ -118,10 +121,16 @@ export default async function WorkersPage({ searchParams }: Props) {
         </div>
       )}
 
+      {invited && !newInviteUrl && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Invite sent — the worker will receive an email with a link to create their account.
+        </div>
+      )}
+
       {newInviteUrl && (
         <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm">
           <p className="mb-1.5 font-medium text-green-800">
-            Invite created — share this link with the worker (dev mode, no email sent yet):
+            Invite created — share this link with the worker (dev mode, no email sent):
           </p>
           <code className="block break-all font-mono text-xs text-green-900">{newInviteUrl}</code>
         </div>
@@ -183,8 +192,7 @@ export default async function WorkersPage({ searchParams }: Props) {
                   <OnboardingBadge status={w.onboarding_status} />
                 </div>
 
-                {/* Dev-mode invite link shown for already-invited workers */}
-                {inviteUrl && (
+                {inviteUrl && isDevMode && (
                   <div className="rounded border border-dashed bg-muted/40 px-3 py-2">
                     <p className="mb-1 text-xs font-medium text-muted-foreground">
                       Dev-mode invite link

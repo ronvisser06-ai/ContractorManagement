@@ -12,6 +12,7 @@ interface Props {
     verify_token?: string
     verify_email?: string
     verified?: string
+    email_sent?: string
   }>
 }
 
@@ -50,7 +51,7 @@ export default async function ProfilePage({ searchParams }: Props) {
   const proto = host.startsWith('localhost') || /^\d+\.\d/.test(host) ? 'http' : 'https'
   const baseUrl = `${proto}://${host}`
 
-  const { error, verify_token, verify_email, verified } = await searchParams
+  const { error, verify_token, verify_email, verified, email_sent } = await searchParams
   const verifyUrl = verify_token
     ? `${baseUrl}/account/verify-email?token=${verify_token}`
     : null
@@ -68,6 +69,13 @@ export default async function ProfilePage({ searchParams }: Props) {
       {verified && (
         <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           Email verified and added to your account.
+        </div>
+      )}
+
+      {email_sent && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Verification email sent to <strong>{email_sent}</strong>. Check your inbox and click the
+          link to confirm.
         </div>
       )}
 
@@ -111,7 +119,7 @@ export default async function ProfilePage({ searchParams }: Props) {
       {verifyUrl && (
         <div className="rounded-md border border-dashed bg-muted/40 px-4 py-3">
           <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-            Dev-mode — verify <strong>{verify_email}</strong> (no email sent yet — Step 7):
+            Dev-mode — verify <strong>{verify_email}</strong> (no email sent):
           </p>
           <a
             href={verifyUrl}

@@ -1,8 +1,10 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ulid } from 'ulid'
+import { sendEmail, emailVerificationEmail } from '@/lib/email/send'
 
 function newId(prefix: string) {
   return `${prefix}${ulid()}`
@@ -64,7 +66,24 @@ export async function requestEmailVerification(formData: FormData) {
     redirect(`/account/profile?error=${encodeURIComponent(error.message)}`)
   }
 
-  redirect(
-    `/account/profile?verify_token=${encodeURIComponent(token)}&verify_email=${encodeURIComponent(rawEmail)}`,
-  )
+  const hdrs = await headers()
+  const host = hdrs.get('host') ?? 'localhost:3000'
+  const proto = host.startsWith('localhost') || /^\d+\.\d/.test(host) ? 'http' : 'https'
+  const link = `${proto}://${host}/account/verify-email?token=${token}`
+
+  const { html, text } = emailVerificationEmail(link)
+  const result = await sendEmail({
+    to: rawEmail,
+    subject: 'Verify your email address',
+    html,
+    text,
+  })
+
+  if (result.sent) {
+    redirect(`/account/profile?email_sent=${encodeURIComponent(rawEmail)}`)
+  } else {
+    redirect(
+      `/account/profile?verify_token=${encodeURIComponent(token)}&verify_email=${encodeURIComponent(rawEmail)}`,
+    )
+  }
 }

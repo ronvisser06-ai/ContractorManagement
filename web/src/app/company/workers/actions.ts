@@ -1,10 +1,12 @@
 'use server'
 
 import { randomBytes } from 'node:crypto'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { newId } from '@/db/utils'
+import { sendEmail, workerInviteEmail } from '@/lib/email/send'
 
 async function requireContractorAdmin() {
   const supabase = await createClient()
@@ -166,8 +168,23 @@ export async function inviteWorker(formData: FormData) {
     .eq('id', membershipId)
     .eq('company_id', companyId)
 
-  // Dev-mode delivery — Step 7 (Resend) replaces this with a real email.
-  console.log(`[DEV] Worker invite for ${workerEmail}: /register/worker?token=${token}`)
+  const hdrs = await headers()
+  const host = hdrs.get('host') ?? 'localhost:3000'
+  const proto = host.startsWith('localhost') || /^\d+\.\d/.test(host) ? 'http' : 'https'
+  const link = `${proto}://${host}/register/worker?token=${token}`
 
-  redirect(`/company/workers?invited_token=${token}`)
+  const { html, text } = workerInviteEmail(link)
+  const result = await sendEmail({
+    to: workerEmail,
+    subject: "You've been invited to create your contractor account",
+    html,
+    text,
+  })
+
+  if (result.sent) {
+    redirect('/company/workers?invited=1')
+  } else {
+    console.log(`[DEV] Worker invite for ${workerEmail}: ${link}`)
+    redirect(`/company/workers?invited_token=${token}`)
+  }
 }
