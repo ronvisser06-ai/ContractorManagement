@@ -99,6 +99,20 @@
       "when": 1782846000000,
       "tag": "0013_expected_on_site_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1782932400000,
+      "tag": "0014_add_email_flow",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1783018800000,
+      "tag": "0015_fix_verify_and_link_email",
+      "breakpoints": true
     }
   ]
 }

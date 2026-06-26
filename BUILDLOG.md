@@ -650,6 +650,39 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Resumed from context-compacted session — fresh conversation for Step 5b.
 
+### Session 2026-06-25 — M1 / Step 6 — Add-email Self-Service + Identity Consolidation
+
+**What I Built**:
+- Migration `0014_add_email_flow.sql`: `email_verifications` table (id/user_id/email/token/status/expires_at) with RLS `read own` + `insert own`. `verify_and_link_email(p_token text) → jsonb` SECURITY DEFINER RPC — validates token (FOR UPDATE lock, pending, not expired), guards cross-user uniqueness, inserts into `user_emails` (auto-sets is_primary if first), re-points any `company_memberships` where `invited_email` matches the verified email (same merge-path logic as `claim_worker_invite`), marks token used, returns `{email, linked_companies}`.
+- Migration `0015_fix_verify_and_link_email.sql`: patch migration — replaced `gen_random_bytes(10)` (pgcrypto, not available in this Supabase instance) with `replace(gen_random_uuid()::text, '-', '')` in the id generation inside the RPC. Migration 0014 was already applied; 0015 runs `CREATE OR REPLACE FUNCTION` to fix the live function.
+- `web/src/app/account/layout.tsx`: account portal shell accessible by any authenticated user. Reads `org_memberships` + `company_memberships` to show context-appropriate back-links ("Admin portal" / "Contractor portal"), plus a Logout button.
+- `web/src/app/account/profile/page.tsx`: displays the user's name, primary auth email (from `users.primary_email`), all `user_emails` rows with Verified/Unverified/Primary badges, a dev-mode verification link banner (shown when `?verify_token=…&verify_email=…` appears in searchParams after submitting the Add email form), and an "Add another email" form.
+- `web/src/app/account/profile/actions.ts` (`requestEmailVerification`): checks auth, rejects if email matches `users.primary_email`, does an early uniqueness check against `user_emails` (RPC re-checks atomically), generates a 64-char hex token via `globalThis.crypto.getRandomValues`, inserts into `email_verifications`, redirects to `/account/profile?verify_token=…&verify_email=…`.
+- `web/src/app/account/verify-email/page.tsx`: reads the `email_verifications` row (RLS: own rows only) to display the email being verified and the used/expired/confirm states.
+- `web/src/app/account/verify-email/actions.ts` (`confirmEmailVerification`): calls `verify_and_link_email` RPC, redirects to `/account/profile?verified=1` on success or back with `?rpc_error=<code>` on failure.
+- Added "Profile" nav link to `web/src/app/app/layout.tsx` (visible to all authenticated org users) and `web/src/app/company/layout.tsx` (visible to all company members, not just admins).
+- `web/src/test/add-email.test.mts`: 3 user-JWT integration tests — (1) add + verify new email: `user_emails` row created with `verified_at` set; (2) pending company_membership targeting the email's `invited_email` is re-pointed to the verifying identity with `onboarding_status=account_created`; (3) email already verified to another user → RPC raises `email_taken`.
+
+**What Went Wrong**:
+- `gen_random_bytes` (pgcrypto) not available in this Supabase project — migration 0014 was applied but the function body raised `42883` on first call. Fixed by creating migration 0015 (`CREATE OR REPLACE FUNCTION`) to replace the call with `replace(gen_random_uuid()::text, '-', '')`. The 0014 file was also corrected for future fresh installs.
+
+**Verified**:
+- Migration 0015 applied via `npm run db:migrate`.
+- `npm test` → 74/74 pass (3 new Step 6 tests + 71 existing, all unaffected).
+- `npm run lint` → 0 errors, 4 pre-existing warnings (unchanged `api/health/route.ts` imports).
+- `npm run build` → clean; `/account/profile` and `/account/verify-email` appear in route table as `ƒ` (dynamic).
+
+**What's Next**:
+- **Step 7 — Real email delivery via Resend**: replace the dev-mode verification link banner with an actual email sent via Resend. The `requestEmailVerification` action already generates the token and stores the `email_verifications` row; Step 7 just adds the Resend `sendEmail` call and removes the banner.
+
+**Rules Followed**:
+- ✓ Read `M1-ContractorCRM-Brief.md` Step 6 + `HowDesign-DataModel.md` §2/§5 before building (Rules 1, 2)
+- ✓ One step only — Resend email delivery deferred to Step 7; standalone merge tool deferred/parked per brief
+- ✓ SECURITY DEFINER RPC for cross-user uniqueness check + membership re-pointing (bypasses caller's RLS)
+- ✓ TypeScript strict, lint, and build all clean; 74 tests green
+
+**Context Usage**: Resumed from context-compacted session — fresh conversation for Step 7.
+
 ---
 
 ## Track Progress

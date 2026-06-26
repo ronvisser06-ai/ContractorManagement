@@ -350,6 +350,20 @@ export const siteWorkerActivations = pgTable(
   (t) => [unique().on(t.siteId, t.userId)],
 )
 
+// Identity — pending email-verification tokens (Step 6 add-email self-service flow).
+// status: 'pending' | 'used'
+export const emailVerifications = pgTable('email_verifications', {
+  id: text('id').primaryKey(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id),
+  email: citext('email').notNull(),
+  token: text('token').notNull().unique(),
+  status: text('status').notNull().default('pending'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 // Shared — tokenized invite records; channel column present even though SMS is deferred
 export const invitations = pgTable('invitations', {
   id: text('id').primaryKey(), // prefixed ULID: inv_<ULID>

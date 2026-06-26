@@ -100,6 +100,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <Link href={item.href}>{item.label}</Link>
             </Button>
           ))}
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/account/profile">Profile</Link>
+          </Button>
           {visibleSoon.map((item) => (
             <span
               key={item.label}
