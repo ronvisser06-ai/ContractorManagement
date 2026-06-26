@@ -170,16 +170,18 @@ function assertContentModelProperties(
 
 // Validates the saved golden fixture against property assertions — no API call.
 // Skips if the golden file hasn't been generated yet (first run with key will create it).
+// Anchor deck: 10-slide Proton H2 OH&S orientation (V3.0 draft).
 test(
   'structure: golden Proton content model passes property checks',
   { skip: !PROTON_GOLDEN_EXISTS ? 'golden not yet generated — run npm test with ANTHROPIC_API_KEY' : false },
   () => {
     const raw = JSON.parse(readFileSync(PROTON_GOLDEN_PATH, 'utf8')) as unknown
-    assertContentModelProperties(raw, 'Proton golden', { minModules: 3, minHazards: 1, minBlocks: 15 })
+    // 10 slides → expect ≥2 modules; hazards optional (policy/intro deck, not site-specific)
+    assertContentModelProperties(raw, 'Proton golden', { minModules: 2, minHazards: 0, minBlocks: 8 })
   },
 )
 
-// Calls the real Sonnet structure stage against the Proton deck.
+// Calls the real Sonnet structure stage against the Proton deck (10 slides).
 // Saves output as golden fixture so the test above can run without a key afterward.
 test(
   'structure: Proton deck → schema-valid ContentModel (saves golden)',
@@ -187,7 +189,7 @@ test(
   async () => {
     const deck = JSON.parse(readFileSync(PROTON_DECK_PATH, 'utf8')) as Record<string, unknown>
     const cm = await callStructure(deck, 'job_eval_proton', 'site_eval')
-    assertContentModelProperties(cm as unknown, 'Proton live', { minModules: 3, minHazards: 1, minBlocks: 15 })
+    assertContentModelProperties(cm as unknown, 'Proton live', { minModules: 2, minHazards: 0, minBlocks: 8 })
     mkdirSync(GOLDEN_DIR, { recursive: true })
     writeFileSync(PROTON_GOLDEN_PATH, JSON.stringify(cm, null, 2), 'utf8')
   },

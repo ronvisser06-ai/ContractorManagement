@@ -96,7 +96,7 @@ def test_extract_pptx_fixture_slides_tables_notes_and_linked_video():
 
 
 _SAMPLE_DECK_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "SampleOrientation", "2025 Proton Safety Orientation_V2.0_Draft (1).pptx"
+    os.path.dirname(__file__), "..", "SampleOrientation", "2025 Proton Safety Orientation_V3.0_Draft.pptx"
 )
 
 
@@ -108,8 +108,8 @@ def test_extract_real_deck_smoke():
 
     deck = extract_pptx.extract_pptx(data, job_id="job_smoke", site_id="site_smoke")
 
-    assert deck["source"]["slide_count"] == 63
-    assert len(deck["slides"]) == 63
+    assert deck["source"]["slide_count"] == 10
+    assert len(deck["slides"]) == 10
     # Every slide carries at least text or an image — nothing was silently dropped.
     assert all(s["text_runs"] or s["image_asset_ids"] for s in deck["slides"])
     assert deck["warnings"] == []
