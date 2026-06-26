@@ -242,9 +242,18 @@ function assertQuizProperties(
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 // Validates the saved golden quiz against property assertions — no API call.
+// Skipped when API key is present: the live test runs in parallel with the
+// structure live test (which may regenerate the CM), causing a stale-golden
+// race condition. In CI (no key) the committed golden is always current.
 test(
   'quiz: golden Proton quiz passes property checks',
-  { skip: !PROTON_QUIZ_EXISTS ? 'golden quiz not yet generated — run npm test with ANTHROPIC_API_KEY' : false },
+  {
+    skip: !PROTON_QUIZ_EXISTS
+      ? 'golden quiz not yet generated — run npm test with ANTHROPIC_API_KEY'
+      : HAS_KEY
+        ? 'API key present — live test validates output; golden may be stale from parallel CM refresh'
+        : false,
+  },
   () => {
     if (!PROTON_CM_EXISTS) {
       assert.fail('proton-content-model.json golden missing — run structure eval first')

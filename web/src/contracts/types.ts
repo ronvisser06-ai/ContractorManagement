@@ -62,7 +62,7 @@ export interface JobRecord {
   max_rework: number
   qa_flagged: boolean
   source_asset: SourceAsset
-  artifacts: Partial<Record<'extracted_deck' | 'content_model' | 'quiz', ArtifactRef>>
+  artifacts: Partial<Record<'extracted_deck' | 'content_model' | 'quiz' | 'qa_verdict', ArtifactRef>>
   qa_history: QAHistoryEntry[]
   error: JobError | null
   package_id: ULID | null

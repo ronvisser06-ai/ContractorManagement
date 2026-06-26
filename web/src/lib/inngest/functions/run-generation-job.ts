@@ -4,7 +4,8 @@ import { generationJobStart } from '../events'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { callStructure, STRUCTURE_MODEL, STRUCTURE_STAGE_VERSION } from '@/lib/pipeline/structure'
 import { callQuiz, QUIZ_MODEL, QUIZ_STAGE_VERSION } from '@/lib/pipeline/quiz'
-import type { ArtifactRef, ContentModel, JobRecord, QAHistoryEntry, SourceAsset } from '@/contracts/types'
+import { callQA, QA_MODEL, QA_STAGE_VERSION } from '@/lib/pipeline/qa'
+import type { ArtifactRef, ContentModel, JobRecord, QAHistoryEntry, Quiz, SourceAsset } from '@/contracts/types'
 
 const ARTIFACTS_BUCKET = 'pipeline-artifacts'
 const SIGNED_URL_TTL_SECONDS = 300
@@ -156,12 +157,36 @@ async function loadContentModel(
   return { contentModel: envelope.payload, ref }
 }
 
+async function loadQuiz(
+  supabase: ReturnType<typeof createAdminClient>,
+  jobId: string,
+): Promise<{ quiz: Quiz; ref: ArtifactRef }> {
+  const { data: jobData, error: jobErr } = await supabase
+    .from('generation_jobs')
+    .select('artifacts')
+    .eq('id', jobId)
+    .single()
+  if (jobErr) throw jobErr
+
+  const artifacts = jobData.artifacts as JobRecord['artifacts']
+  const ref = artifacts.quiz
+  if (!ref) throw new Error('quiz artifact missing — cannot run qa_review stage')
+
+  const { data: blob, error: dlErr } = await supabase.storage
+    .from(ARTIFACTS_BUCKET)
+    .download(ref.storage_key)
+  if (dlErr) throw dlErr
+
+  const envelope = JSON.parse(await blob.text()) as { payload: Quiz }
+  return { quiz: envelope.payload, ref }
+}
+
 // Walks a job through queued → extracting → structuring → generating_quiz →
 // qa_review → awaiting_approval (contracts §1).
 // extracting: real deterministic parse (M0 Step 3)
 // structuring: real Sonnet call (M2 Step 1)
 // generating_quiz: real Sonnet call (M2 Step 2)
-// qa_review: stubbed canned envelope until M2 Step 3
+// qa_review: real Opus evaluator (M2 Step 3a); rework loop wired in Step 3b
 export const runGenerationJob = inngest.createFunction(
   { id: 'run-generation-job', triggers: [generationJobStart] },
   async ({ event, step }) => {
@@ -237,14 +262,43 @@ export const runGenerationJob = inngest.createFunction(
       if (error) throw error
     })
 
-    await step.sleep('pace-qa_review', '2s')
-
     await step.run('produce-qa_review', async () => {
+      const { deck, ref: deckRef } = await loadExtractedDeck(supabase, jobId)
+      const { contentModel, ref: contentModelRef } = await loadContentModel(supabase, jobId)
+      const { quiz, ref: quizRef } = await loadQuiz(supabase, jobId)
+
+      const { data: jobData, error: jobErr } = await supabase
+        .from('generation_jobs')
+        .select('rework_count, max_rework')
+        .eq('id', jobId)
+        .single()
+      if (jobErr) throw jobErr
+      const reworkCount = (jobData.rework_count as number) ?? 0
+      const maxRework = (jobData.max_rework as number) ?? 3
+
+      const verdict = await callQA(deck, contentModel, quiz, jobId, siteId, reworkCount, maxRework)
+
+      const envelope = buildEnvelope(jobId, 'qa_review', verdict as unknown as Record<string, unknown>, {
+        stageImplVersion: QA_STAGE_VERSION,
+        inputRefs: {
+          extracted_deck_sha256: deckRef.sha256,
+          content_model_sha256: contentModelRef.sha256,
+          quiz_sha256: quizRef.sha256,
+        },
+        kind: 'agent',
+        model: QA_MODEL,
+      })
+      await storeArtifact(supabase, jobId, siteId, 'qa_verdict', envelope)
+
+      const openIssueCount = verdict.issues.filter(
+        (i) => i.severity === 'blocker' || i.severity === 'major',
+      ).length
+
       const verdictEntry: QAHistoryEntry = {
-        attempt: 1,
-        verdict: 'pass',
-        routed_to: 'none',
-        open_issue_count: 0,
+        attempt: reworkCount + 1,
+        verdict: verdict.verdict,
+        routed_to: verdict.routed_to,
+        open_issue_count: openIssueCount,
         produced_at: new Date().toISOString(),
       }
 

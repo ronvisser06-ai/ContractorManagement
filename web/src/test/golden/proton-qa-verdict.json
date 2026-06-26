@@ -1,0 +1,77 @@
+{
+  "verdict": "needs_rework",
+  "scores": {
+    "coverage": {
+      "value": 1,
+      "pass": true
+    },
+    "correctness": {
+      "value": 0.58,
+      "pass": false
+    },
+    "fidelity": {
+      "value": 0.97,
+      "pass": true
+    }
+  },
+  "issues": [
+    {
+      "id": "iss_01",
+      "severity": "major",
+      "category": "fidelity",
+      "target_stage": "structure",
+      "target_ref": "blk_03_02",
+      "description": "The hazard block fabricates the sentence 'Hazards identified through risk assessments must be controlled to protect workers from injury or harm,' which does not appear on slide 7. More importantly, the safety-critical hierarchy of controls from slide 7 (eliminate, substitute, engineer, administration, PPE) was omitted entirely and not represented in any block, leaving objective obj_03_1's source content absent from the ContentModel.",
+      "suggested_fix": "Add a block (e.g., a list) capturing the five control types verbatim from slide 7, and remove the invented sentence. Represent the hierarchy faithfully so quiz items about controls can cite real source text."
+    },
+    {
+      "id": "iss_02",
+      "severity": "blocker",
+      "category": "correctness",
+      "target_stage": "structure",
+      "target_ref": "q_08",
+      "description": "q_08 asks for the highest-level hazard control, but its only cited block (blk_03_02) contains no control hierarchy text. The correct answer 'Eliminating the hazard completely' is not supported by the cited source. On safety content this is an unverifiable correct answer.",
+      "suggested_fix": "Create/repair the controls list block in structure, then re-cite q_08 to that block so the answer is verifiable."
+    },
+    {
+      "id": "iss_03",
+      "severity": "blocker",
+      "category": "correctness",
+      "target_stage": "structure",
+      "target_ref": "q_09",
+      "description": "q_09 asks which control follows elimination/substitution before PPE (engineering controls), but cited blk_03_02 contains no hierarchy or engineering-control text. The correct answer is unsupported by the cited source.",
+      "suggested_fix": "Re-cite q_09 to a faithful controls-hierarchy block once it exists in the ContentModel."
+    },
+    {
+      "id": "iss_04",
+      "severity": "major",
+      "category": "correctness",
+      "target_stage": "generate_quiz",
+      "target_ref": "q_06",
+      "description": "q_06 asks where the HSE Policy can be found; the correct answer ('beginning of the Health and Safety Program Manual') is stated in blk_02_09, but the question cites blk_02_08 (the HSE commitments list), which does not contain the answer. The rationale even attributes the statement to blk_02_08 incorrectly.",
+      "suggested_fix": "Change source_refs for q_06 to blk_02_09 and correct the rationale citation."
+    },
+    {
+      "id": "iss_05",
+      "severity": "major",
+      "category": "correctness",
+      "target_stage": "generate_quiz",
+      "target_ref": "q_07",
+      "description": "q_07's correct answer depends on the statement that every employee must be familiar with the manual, which is in blk_02_11. The question only cites blk_02_10 (a heading), which does not support the answer.",
+      "suggested_fix": "Add blk_02_11 to source_refs for q_07 and update the rationale to cite it."
+    },
+    {
+      "id": "iss_06",
+      "severity": "major",
+      "category": "correctness",
+      "target_stage": "generate_quiz",
+      "target_ref": "q_10",
+      "description": "q_10's correct answer (employer must do everything practicable for worker health/safety/welfare) is supported by blk_04_02, but the question cites only blk_04_01 (the heading 'OH&S Legislation'), which contains no such content.",
+      "suggested_fix": "Change source_refs for q_10 to blk_04_02 and correct the rationale citation."
+    }
+  ],
+  "routed_to": "structure",
+  "decision": "rework",
+  "rework_count": 0,
+  "max_rework": 3
+}

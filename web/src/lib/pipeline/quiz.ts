@@ -136,27 +136,37 @@ site_id: "${siteId}"
 
 ${formatContentModelForPrompt(contentModel)}`
 
-  const response = await client.messages.create({
-    model: QUIZ_MODEL,
-    max_tokens: 6000,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userMessage }],
-  })
+  // Retry once on validation failure — models occasionally confuse field values
+  // (e.g. type: "application" instead of "single_choice"). A fresh call usually succeeds.
+  let lastError: Error | undefined
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await client.messages.create({
+        model: QUIZ_MODEL,
+        max_tokens: 6000,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userMessage }],
+      })
 
-  const first = response.content[0]
-  if (first.type !== 'text') {
-    throw new Error('generate_quiz stage: non-text response from model')
+      const first = response.content[0]
+      if (first.type !== 'text') {
+        throw new Error('generate_quiz stage: non-text response from model')
+      }
+
+      let parsed: unknown
+      try {
+        const text = first.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+        parsed = JSON.parse(text)
+      } catch (err) {
+        throw new Error(`generate_quiz stage: JSON parse failed — ${(err as Error).message}`)
+      }
+
+      return validateAndRepairQuiz(parsed, contentModel)
+    } catch (err) {
+      lastError = err as Error
+    }
   }
-
-  let parsed: unknown
-  try {
-    const text = first.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-    parsed = JSON.parse(text)
-  } catch (err) {
-    throw new Error(`generate_quiz stage: JSON parse failed — ${(err as Error).message}`)
-  }
-
-  return validateAndRepairQuiz(parsed, contentModel)
+  throw lastError!
 }
 
 function validateAndRepairQuiz(raw: unknown, contentModel: ContentModel): Quiz {
@@ -174,8 +184,14 @@ function validateAndRepairQuiz(raw: unknown, contentModel: ContentModel): Quiz {
 
   // Collect all block ids from the ContentModel for source_ref validation
   const allBlockIds = new Set<string>()
+  // Track block types so we can reject image/video citations (rule 3 of the system prompt)
+  const blockTypes = new Map<string, string>()
+  const NON_CITEABLE = new Set(['image', 'video'])
   for (const mod of contentModel.modules) {
-    for (const blk of mod.blocks) allBlockIds.add(blk.id)
+    for (const blk of mod.blocks) {
+      allBlockIds.add(blk.id)
+      blockTypes.set(blk.id, blk.type)
+    }
   }
 
   // Collect hazard block ids for coverage_map derivation
@@ -206,6 +222,15 @@ function validateAndRepairQuiz(raw: unknown, contentModel: ContentModel): Quiz {
         if (typeof ref !== 'string' || !allBlockIds.has(ref)) {
           errors.push(`question ${qId}: source_ref "${ref}" not found in ContentModel blocks`)
         }
+      }
+      // At least one source_ref must be a citeable (non-image/video) text block
+      const hasTextRef = (sourceRefs as string[]).some(
+        (ref) => allBlockIds.has(ref) && !NON_CITEABLE.has(blockTypes.get(ref) ?? ''),
+      )
+      if (!hasTextRef) {
+        errors.push(
+          `question ${qId}: source_refs must include ≥1 text block (not only image/video blocks)`,
+        )
       }
     }
 
