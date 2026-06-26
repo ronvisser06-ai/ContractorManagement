@@ -7,7 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { inngest } from '@/lib/inngest/client'
 import { generationJobApprove } from '@/lib/inngest/events'
 import { validateBlock } from '@/lib/renderer/validate'
-import type { ContentModel, JobRecord, RequalificationPolicy } from '@/contracts/types'
+import type { ContentModel, JobRecord, Quiz, RequalificationPolicy } from '@/contracts/types'
 
 const ARTIFACTS_BUCKET = 'pipeline-artifacts'
 
@@ -90,6 +90,151 @@ export async function saveContentModelEdits(
 
   const ref = { storage_key: storageKey, sha256, produced_at: now }
   const artifacts = { ...(job.artifacts as JobRecord['artifacts']), content_model: ref }
+
+  const { error: updateErr } = await admin
+    .from('generation_jobs')
+    .update({ artifacts, updated_at: now })
+    .eq('id', jobId)
+  if (updateErr) return { error: updateErr.message }
+
+  return {}
+}
+
+// ── Bounded quiz editor (contracts §7) ───────────────────────────────────────
+// Validates the quiz client-side before the server action runs, then the server
+// re-validates source_refs against the currently stored content model. Both
+// coverage_map and question_count are recomputed from the question array so the
+// approver cannot desync those derived fields.
+
+function buildCoverageMap(questions: Quiz['questions']): Record<string, string[]> {
+  const map: Record<string, string[]> = {}
+  for (const q of questions) {
+    if (!q.objective_id) continue
+    if (!map[q.objective_id]) map[q.objective_id] = []
+    map[q.objective_id].push(q.id)
+  }
+  return map
+}
+
+function validateQuizForSave(
+  quiz: Quiz,
+  blockIds: Set<string>,
+): string[] {
+  const errors: string[] = []
+  const t = quiz.meta.pass_threshold
+  if (typeof t !== 'number' || t <= 0 || t > 1) {
+    errors.push('Pass threshold must be between 1% and 100%')
+  }
+  if (quiz.meta.attempts_allowed < 1) {
+    errors.push('Attempts allowed must be at least 1')
+  }
+  if (quiz.questions.length === 0) {
+    errors.push('Quiz must have at least one question')
+  }
+  quiz.questions.forEach((q, qi) => {
+    const label = `Q${qi + 1}`
+    if (!q.stem.trim()) errors.push(`${label}: stem is required`)
+    if (q.options.length < 2) errors.push(`${label}: at least 2 options required`)
+    if (q.correct_option_ids.length === 0) errors.push(`${label}: must have at least one correct answer`)
+    const optIds = new Set(q.options.map((o) => o.id))
+    for (const cid of q.correct_option_ids) {
+      if (!optIds.has(cid)) errors.push(`${label}: correct answer "${cid}" is not a valid option`)
+    }
+    for (const ref of q.source_refs) {
+      if (!blockIds.has(ref)) errors.push(`${label}: source_ref "${ref}" does not resolve to a block`)
+    }
+  })
+  return errors
+}
+
+export async function saveQuizEdits(
+  jobId: string,
+  quiz: Quiz,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: job } = await supabase
+    .from('generation_jobs')
+    .select('org_id, site_id, status, artifacts')
+    .eq('id', jobId)
+    .maybeSingle()
+  if (!job) return { error: 'Job not found' }
+  if (job.status !== 'awaiting_approval') return { error: 'Job is not awaiting approval' }
+
+  const { data: membership } = await supabase
+    .from('org_memberships')
+    .select('roles')
+    .eq('user_id', user.id)
+    .eq('org_id', job.org_id)
+    .eq('status', 'active')
+    .maybeSingle()
+  const roles = (membership?.roles as string[] | undefined) ?? []
+  const canEdit = roles.some((r) => ['content_developer', 'content_approver', 'client_admin'].includes(r))
+  if (!canEdit) return { error: 'Insufficient permissions to edit quiz' }
+
+  if (!quiz || !Array.isArray(quiz.questions)) {
+    return { error: 'Invalid quiz structure' }
+  }
+
+  // Fetch current content model from storage to resolve source_refs server-side
+  const admin = createAdminClient()
+  const storedArtifacts = job.artifacts as JobRecord['artifacts']
+  const cmRef = storedArtifacts.content_model
+  const blockIds = new Set<string>()
+  if (cmRef) {
+    const { data: blob, error: dlErr } = await admin.storage
+      .from(ARTIFACTS_BUCKET)
+      .download(cmRef.storage_key)
+    if (!dlErr && blob) {
+      const envelope = JSON.parse(await blob.text()) as { payload: ContentModel }
+      for (const mod of envelope.payload.modules ?? []) {
+        for (const blk of mod.blocks ?? []) {
+          if (typeof blk.id === 'string') blockIds.add(blk.id)
+        }
+      }
+    }
+  }
+
+  const errors = validateQuizForSave(quiz, blockIds)
+  if (errors.length > 0) return { error: errors[0] }
+
+  // Recompute derived fields and build human envelope
+  const now = new Date().toISOString()
+  const quizFinal: Quiz = {
+    ...quiz,
+    meta: { ...quiz.meta, question_count: quiz.questions.length },
+    coverage_map: buildCoverageMap(quiz.questions),
+  }
+  const envelope = {
+    job_id: jobId,
+    stage: 'generating_quiz',
+    attempt: 1,
+    schema_version: '0.1',
+    produced_at: now,
+    produced_by: {
+      kind: 'human',
+      editor: user.id,
+      stage_impl_version: 'generating_quiz@human-edit-1.0',
+    },
+    input_refs: {},
+    payload: quizFinal,
+  }
+
+  const body = JSON.stringify(envelope, null, 2)
+  const sha256 = createHash('sha256').update(body).digest('hex')
+  const storageKey = `sites/${job.site_id}/jobs/${jobId}/artifacts/quiz.json`
+
+  const { error: uploadErr } = await admin.storage
+    .from(ARTIFACTS_BUCKET)
+    .upload(storageKey, body, { contentType: 'application/json', upsert: true })
+  if (uploadErr) return { error: uploadErr.message }
+
+  const ref = { storage_key: storageKey, sha256, produced_at: now }
+  const artifacts = { ...(job.artifacts as JobRecord['artifacts']), quiz: ref }
 
   const { error: updateErr } = await admin
     .from('generation_jobs')

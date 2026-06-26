@@ -11,7 +11,7 @@ import { ChevronUp, ChevronDown, Trash2, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ContentModelView } from '@/components/renderer/ContentModelView'
 import { validateBlock } from '@/lib/renderer/validate'
-import type { BlockType, ContentBlock, ContentModel } from '@/contracts/types'
+import type { BlockType, ContentBlock, ContentModel, QAIssue } from '@/contracts/types'
 import { saveContentModelEdits } from './actions'
 
 // ── Block-type metadata ────────────────────────────────────────────────────────
@@ -465,9 +465,10 @@ interface Props {
   jobId: string
   initialCm: ContentModel
   canEdit: boolean
+  qaIssues?: QAIssue[]
 }
 
-export function ContentModelEditor({ jobId, initialCm, canEdit }: Props) {
+export function ContentModelEditor({ jobId, initialCm, canEdit, qaIssues = [] }: Props) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<ContentModel>(initialCm)
   const [savedCm, setSavedCm] = useState<ContentModel>(initialCm)
@@ -476,6 +477,12 @@ export function ContentModelEditor({ jobId, initialCm, canEdit }: Props) {
   const [insertPos, setInsertPos] = useState<InsertPos | null>(null)
   const [insertType, setInsertType] = useState<BlockType>('paragraph')
   const [isPending, startTransition] = useTransition()
+
+  const cmIssues = qaIssues.filter((i) => i.target_stage === 'structure')
+
+  function issuesForBlock(blockId: string): QAIssue[] {
+    return cmIssues.filter((i) => i.target_ref === blockId)
+  }
 
   // ── View mode ──────────────────────────────────────────────────────────────
 
@@ -497,6 +504,28 @@ export function ContentModelEditor({ jobId, initialCm, canEdit }: Props) {
             </Button>
           )}
         </div>
+        {/* QA issues summary in view mode */}
+        {cmIssues.length > 0 && (
+          <div className="space-y-2">
+            {cmIssues.map((issue) => (
+              <div
+                key={issue.id}
+                className={`rounded-md border px-4 py-3 text-sm ${
+                  issue.severity === 'blocker'
+                    ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                    : issue.severity === 'major'
+                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-800'
+                      : 'border-border bg-muted/50 text-muted-foreground'
+                }`}
+              >
+                <span className="font-medium capitalize">{issue.severity}:</span> {issue.description}
+                {issue.suggested_fix && (
+                  <p className="mt-0.5 text-xs opacity-80">Fix: {issue.suggested_fix}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         <div className="rounded-md border">
           <ContentModelView contentModel={savedCm} assetUrls={{}} />
         </div>
@@ -746,6 +775,25 @@ export function ContentModelEditor({ jobId, initialCm, canEdit }: Props) {
                       </button>
                     </div>
                   </div>
+                  {/* QA issues for this block */}
+                  {issuesForBlock(blk.id).map((issue) => (
+                    <div
+                      key={issue.id}
+                      className={`rounded border px-2 py-1.5 text-xs ${
+                        issue.severity === 'blocker'
+                          ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                          : issue.severity === 'major'
+                            ? 'border-amber-500/50 bg-amber-500/10 text-amber-800'
+                            : 'border-border bg-muted/50 text-muted-foreground'
+                      }`}
+                    >
+                      <span className="font-medium capitalize">{issue.severity}:</span>{' '}
+                      {issue.description}
+                      {issue.suggested_fix && (
+                        <span className="opacity-80"> — Fix: {issue.suggested_fix}</span>
+                      )}
+                    </div>
+                  ))}
                   {/* Type-specific fields */}
                   <BlockFields
                     block={blk}

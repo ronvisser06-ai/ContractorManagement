@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { ContentModel, JobRecord, Quiz } from '@/contracts/types'
+import type { ContentModel, JobRecord, QAIssue, QAVerdict, Quiz } from '@/contracts/types'
 import { JobTracker } from './job-tracker'
 import { ApprovalReview } from './approval-review'
 
@@ -44,7 +44,13 @@ export default async function JobPage({ params, searchParams }: Props) {
 
   if (!job) notFound()
 
-  let review: { contentModel: ContentModel; quiz: Quiz; canApprove: boolean; canEdit: boolean } | null = null
+  let review: {
+    contentModel: ContentModel
+    quiz: Quiz
+    canApprove: boolean
+    canEdit: boolean
+    qaIssues: QAIssue[]
+  } | null = null
 
   if (job.status === 'awaiting_approval') {
     const artifacts = job.artifacts as JobRecord['artifacts']
@@ -52,10 +58,16 @@ export default async function JobPage({ params, searchParams }: Props) {
     const quizRef = artifacts.quiz
 
     if (contentModelRef && quizRef) {
-      const [contentModel, quiz] = await Promise.all([
+      // Fetch QA verdict when flagged so we can surface issues next to their references.
+      const qaVerdictRef = artifacts.qa_verdict
+      const downloads: [Promise<ContentModel>, Promise<Quiz>, Promise<QAVerdict | null>] = [
         downloadArtifactPayload<ContentModel>(contentModelRef.storage_key),
         downloadArtifactPayload<Quiz>(quizRef.storage_key),
-      ])
+        job.qa_flagged && qaVerdictRef
+          ? downloadArtifactPayload<QAVerdict>(qaVerdictRef.storage_key)
+          : Promise.resolve(null),
+      ]
+      const [contentModel, quiz, qaVerdict] = await Promise.all(downloads)
 
       const { data: membership } = await supabase
         .from('org_memberships')
@@ -70,7 +82,13 @@ export default async function JobPage({ params, searchParams }: Props) {
       const canEdit = roles.some((r) =>
         ['content_developer', 'content_approver', 'client_admin'].includes(r),
       )
-      review = { contentModel, quiz, canApprove, canEdit }
+      review = {
+        contentModel,
+        quiz,
+        canApprove,
+        canEdit,
+        qaIssues: qaVerdict?.issues ?? [],
+      }
     }
   }
 
@@ -89,6 +107,7 @@ export default async function JobPage({ params, searchParams }: Props) {
           contentModel={review.contentModel}
           quiz={review.quiz}
           qaFlagged={job.qa_flagged}
+          qaIssues={review.qaIssues}
           canApprove={review.canApprove}
           canEdit={review.canEdit}
         />

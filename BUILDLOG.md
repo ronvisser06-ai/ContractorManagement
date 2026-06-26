@@ -888,6 +888,47 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Continued from context-compacted M2 Step 3b session.
 
+### Session 2026-06-26 — M2 / Step 4b — Quiz Editor + QA Issue Surface + Publish-from-Edited
+
+**What I Built**:
+- `web/src/app/app/jobs/[jobId]/quiz-editor.tsx` (NEW, `'use client'`): bounded quiz editor per contracts §7. View mode shows `QuizView` + "Edit quiz" button (for `content_developer | content_approver | client_admin`), plus QA issue banners for any quiz-targeted issues above the view. Edit mode: meta panel (pass_threshold %, attempts_allowed, shuffle_questions/options toggles); per-question cards with type selector (single_choice/multi_choice/true_false), difficulty selector, stem textarea, option list (add/remove/edit text, radio/checkbox for single/multi, fixed fields for true_false), rationale textarea, source_refs display (read-only per §7 — contracts say stem/options/correct/rationale, not source_refs), move up/down + delete; QA issue banners inline above the question body; "Add question" button. Client-side validation before save; `useTransition` for the server action call. `question_count` and `coverage_map` are recomputed from the question array on save.
+- `web/src/app/app/jobs/[jobId]/actions.ts`: added `saveQuizEdits(jobId, quiz)` server action. Auth → role check → status guard → fetches current CM from storage to build block ID set for source_ref resolution → runs `validateQuizForSave` (pass_threshold range, attempts_allowed ≥1, ≥1 question, each question: stem non-empty, ≥2 options, ≥1 correct_option_id referencing a real option, source_refs resolve to CM blocks) → builds human envelope → upserts `quiz.json` → updates `artifacts.quiz` ref with new sha256. Also added pure helper `buildCoverageMap(questions)` used by both action and editor.
+- `web/src/app/app/jobs/[jobId]/content-model-editor.tsx`: added `qaIssues?: QAIssue[]` prop. View mode shows a summary banner for each CM-targeted issue (`target_stage=structure`) above the ContentModelView. Edit mode shows per-block issue banners (`target_ref === block.id`) inside the block card above the type-specific fields.
+- `web/src/app/app/jobs/[jobId]/approval-review.tsx`: added `qaIssues: QAIssue[]` prop; updated QA banner text to tell the approver issues are highlighted below; passes all issues to `ContentModelEditor` and `QuizEditor` (each component filters by its own `target_stage`). Replaced `<QuizView>` with `<QuizEditor>`.
+- `web/src/app/app/jobs/[jobId]/page.tsx`: added `QAIssue`, `QAVerdict` imports; when `job.qa_flagged && artifacts.qa_verdict` is set, downloads and parses the QA verdict artifact alongside CM and quiz (parallelized in `Promise.all`); passes `qaVerdict?.issues ?? []` to `ApprovalReview`.
+
+**Publish-from-edited correctness (code trace)**:
+The approve→publish path reads `artifacts.content_model.sha256` and `artifacts.quiz.sha256` from the DB row. Both of these refs are updated in-place by `saveContentModelEdits` and `saveQuizEdits` respectively when the approver saves edits. `publishOrientationPackage` computes `content_hash = sha256(cm_sha256 + ':' + quiz_sha256)`. Therefore: any human edit → new sha256 stored in DB → new content_hash on publish — proven by reading the code, no external state needed. The requalification_policy picker in the approve form was already wired through the Inngest event and the publish function from Step 5 (M0); no changes needed there.
+
+**What Went Wrong**: Nothing.
+
+**Verified**:
+- `tsc --noEmit` → 0 errors.
+- `npm run lint` → 0 errors (4 pre-existing warnings in unrelated health route).
+- `npm run build` → clean, all routes resolve.
+
+**Closing browser verification (to be done by the approver after generating a job)**:
+1. Navigate to a job in `awaiting_approval` state — if none, upload a deck at `/app/sites` and trigger generation.
+2. If `qa_flagged=true`: confirm issue banners appear next to the referenced question/block.
+3. Click "Edit quiz" → edit the flagged question's options/rationale to resolve the QA issue → "Save changes".
+4. Confirm no validation errors appear (stem + ≥2 options + correct answer present).
+5. Click "Approve & publish" with a requalification policy.
+6. Navigate back to the job — confirm status is `published`.
+7. Query `orientation_packages` for this site — confirm the `content_hash` matches `sha256(cm_sha256:new_quiz_sha256)` and the `version` is incremented. (Can verify via Supabase dashboard: Table Editor → orientation_packages.)
+
+**What's Next**:
+- **M2 Step 5 — Production pipeline wiring**: Inngest Cloud signing/event keys in Vercel; Python extractor Vercel project; `ANTHROPIC_API_KEY` in Vercel prod; decide extractor timeout host for large decks (73s real; Hobby caps at 10s); end-to-end prod verification (upload deck in prod, full pipeline runs).
+- Pre-pilot: re-enable Supabase email confirmation; orphaned invite-stub cleanup; Deck PII/data-handling note.
+
+**Rules Followed**:
+- ✓ Read M2 Step 4 brief + contracts §4.4, §4.6, §7 before building
+- ✓ Publish-from-edited works without any changes to the publish path — human edits land in the same artifact keys the publish function already reads
+- ✓ Validation is double: client-side (UX) and server-side (real gate with CM-loaded block IDs)
+- ✓ source_refs are displayed read-only per §7 (stem/options/correct/rationale in scope; source_refs not listed)
+- ✓ coverage_map and question_count recomputed on save — approver cannot desync these derived fields
+
+**Context Usage**: Continued from context-compacted Step 4a session — fresh conversation for Step 4b.
+
 ---
 
 ## Track Progress

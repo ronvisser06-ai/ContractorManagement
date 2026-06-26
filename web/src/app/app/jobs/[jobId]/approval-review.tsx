@@ -1,20 +1,29 @@
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { QuizView } from '@/components/renderer/QuizView'
-import type { ContentModel, Quiz } from '@/contracts/types'
+import type { ContentModel, QAIssue, Quiz } from '@/contracts/types'
 import { approveJob } from './actions'
 import { ContentModelEditor } from './content-model-editor'
+import { QuizEditor } from './quiz-editor'
 
 interface Props {
   jobId: string
   contentModel: ContentModel
   quiz: Quiz
   qaFlagged: boolean
+  qaIssues: QAIssue[]
   canApprove: boolean
   canEdit: boolean
 }
 
-export function ApprovalReview({ jobId, contentModel, quiz, qaFlagged, canApprove, canEdit }: Props) {
+export function ApprovalReview({
+  jobId,
+  contentModel,
+  quiz,
+  qaFlagged,
+  qaIssues,
+  canApprove,
+  canEdit,
+}: Props) {
   return (
     <div className="space-y-8 rounded-lg border bg-card p-4 sm:p-6">
       <div className="space-y-1">
@@ -24,16 +33,19 @@ export function ApprovalReview({ jobId, contentModel, quiz, qaFlagged, canApprov
 
       {qaFlagged && (
         <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-800">
-          QA flagged this draft for review — see QA history above before approving.
+          QA flagged this draft — issues are highlighted below next to the content they reference.
         </div>
       )}
 
-      <ContentModelEditor jobId={jobId} initialCm={contentModel} canEdit={canEdit} />
+      <ContentModelEditor jobId={jobId} initialCm={contentModel} canEdit={canEdit} qaIssues={qaIssues} />
 
-      <div>
-        <h3 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">Quiz</h3>
-        <QuizView quiz={quiz} contentModel={contentModel} />
-      </div>
+      <QuizEditor
+        jobId={jobId}
+        initialQuiz={quiz}
+        contentModel={contentModel}
+        qaIssues={qaIssues}
+        canEdit={canEdit}
+      />
 
       {canApprove ? (
         <form action={approveJob} className="space-y-3 rounded-md border bg-background p-4">
