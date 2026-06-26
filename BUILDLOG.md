@@ -720,6 +720,42 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Resumed from context-compacted session — M1 complete.
 
+### Session 2026-06-26 — M2 / Step 1 — Anthropic SDK + Real Structure Stage + Eval Harness
+
+**What I Built**:
+- Installed `@anthropic-ai/sdk` in `web/`.
+- `web/src/lib/pipeline/structure.ts`: real Sonnet structure stage. Lazy-instantiates `Anthropic` from `ANTHROPIC_API_KEY` (null if absent — same dev-fallback pattern as Resend). `formatDeckForPrompt` renders the `ExtractedDeck` as compact slide text (title, text_runs, tables, image/video IDs, speaker notes truncated at 300 chars) for the model prompt. `callStructure(deck, jobId, siteId) → ContentModel`: sends the deck to `claude-sonnet-4-6` with a 9-type closed block-set system prompt, parses and JSON-strips the response, then validates via `validateAndRepair` — which runs every block through the existing `validateBlocks` closed-set validator, overrides `meta.site_id` from the actual siteId (never trust the model on this), copies branding from the source deck, and derives `hazard_index` from all hazard blocks if the model omitted it. On any validation failure, throws (Inngest retries the step).
+- `web/src/lib/inngest/functions/run-generation-job.ts`: replaced the `buildCannedContentModel` + `STUBBED_STAGES` structuring loop with inline real steps. New `loadExtractedDeck()` helper downloads the `extracted_deck` artifact from Supabase storage and extracts the payload. `enter-structuring` and `produce-structuring` are now real named Inngest steps; `produce-structuring` calls `callStructure`, wraps output in the stage envelope with `kind: 'llm'` and `model: STRUCTURE_MODEL`, and stores to `content_model` artifact. Updated `buildEnvelope` to accept optional `kind` and `model` parameters (contracts §3). `generating_quiz` stays a canned stub (M2 Step 2). Removed `pace-structuring` sleep (not needed for a real API call).
+- `web/src/test/pipeline-structure.test.mts`: eval harness (4 tests). Properties asserted: schema-valid `ContentModel` (meta/modules/hazard_index), every block passes `validateBlocks`, every block has `source_ref.slide_index`, hazard_index entries reference real block_ids. Tests skip cleanly without the API key (0 failures, 4 skips). With the key: (1) Proton deck → conforming ContentModel + saves `golden/proton-content-model.json`; (2) golden fixture passes property checks (runs without key after golden is saved); (3) synthetic 2-slide hazard deck → non-empty hazard_index; (4) synthetic minimal 1-slide deck → ≥1 module + valid blocks.
+- `web/src/test/golden/` directory created (golden fixture generated on first `npm test` with key).
+
+**Env var to add** (locally in `.env.local`, in Vercel later at M2 Step 5):
+- `ANTHROPIC_API_KEY` — from https://console.anthropic.com/api-keys
+
+**What Went Wrong**:
+- Two TypeScript strict double-cast errors (`ContentModel as Record<string, unknown>` and vice versa — both incompatible without going through `unknown`). Fixed with `as unknown as X` in both the workflow and the structure module.
+- `$LastExitCode` check after `Select-String` gave a false "BUILD FAILED" — `Select-String` sets exit code 1 when no matches, not because the build failed. The actual build was clean (verified via route output).
+
+**Verified**:
+- `tsc --noEmit` → 0 errors.
+- `npm run lint` on all modified/new files → 0 errors.
+- `npm run build` → clean (same route table, no new errors).
+- `node --test src/test/pipeline-structure.test.mts` (no key) → 4 skipped, 0 failed.
+- **Eval green pending key**: add `ANTHROPIC_API_KEY` to `.env.local` and run `npm test` — the Proton and synthetic tests run live, generate the golden fixture, and the golden-fixture test passes. Commit `golden/proton-content-model.json` alongside.
+
+**What's Next**:
+- Add `ANTHROPIC_API_KEY` to `.env.local`. Run `npm test` → eval should be fully green (live Proton + synthetic tests pass, golden generated). Commit golden fixture.
+- **M2 Step 2 — Real `generate_quiz` stage**: replace the quiz stub with a Sonnet call producing a contract-conforming `Quiz` from the `ContentModel`.
+
+**Rules Followed**:
+- ✓ Read `M2-GenerationPipeline-Brief.md` Step 1 + working agreement, `orientation_pipeline_contracts_v0.1.md` §3/§4.2/§4.3/§6, `CLAUDE.md` §5/§7 before building (Rules 1, 2)
+- ✓ One step only — quiz stub untouched, qa_review stub untouched (M2 Steps 2–3)
+- ✓ Closed block-type set enforced by existing `validateBlocks` validator on every model response — no new types can sneak in
+- ✓ Dev fallback: `ANTHROPIC_API_KEY` absent → `client` is null → `callStructure` throws immediately (Inngest retries); tests skip cleanly
+- ✓ TypeScript strict, lint, and build all clean
+
+**Context Usage**: Resumed from context-compacted session — fresh conversation for M2 Step 2 after adding key + confirming eval green.
+
 ---
 
 ## Track Progress

@@ -2,71 +2,15 @@ import { createHash } from 'node:crypto'
 import { inngest } from '../client'
 import { generationJobStart } from '../events'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { callStructure, STRUCTURE_MODEL, STRUCTURE_STAGE_VERSION } from '@/lib/pipeline/structure'
 import type { ArtifactRef, JobRecord, QAHistoryEntry, SourceAsset } from '@/contracts/types'
 
 const ARTIFACTS_BUCKET = 'pipeline-artifacts'
 const SIGNED_URL_TTL_SECONDS = 300
 
-// Canned ContentModel for the still-stubbed structuring stage (real AI
-// structuring is M2). Shaped per contracts §4.2 — not just a placeholder note
-// — so the Step 4 renderer and the Step 5 approval screen have something real
-// to render and cite. The quiz stub below cites blk_stub_03 directly.
-function buildCannedContentModel(siteId: string): Record<string, unknown> {
-  return {
-    meta: {
-      title: 'Site Safety Orientation (Stub)',
-      site_id: siteId,
-      language: 'en',
-      estimated_minutes: 5,
-      reading_level: 'grade_8',
-    },
-    branding: {
-      colors: { primary: '#012A4A', secondary: '#2A9D8F', accent: '#F4A261' },
-      fonts: { heading: 'Inter', body: 'Inter' },
-      logo_asset_id: null,
-    },
-    modules: [
-      {
-        id: 'mod_stub_01',
-        order: 1,
-        title: 'Welcome',
-        source_slides: [0],
-        learning_objectives: [
-          {
-            id: 'obj_stub_01',
-            text: 'State the primary control for the stub hazard.',
-            source_block_ids: ['blk_stub_03'],
-          },
-        ],
-        blocks: [
-          { id: 'blk_stub_01', type: 'heading', level: 1, text: 'Welcome to the Site', source_ref: { slide_index: 0 } },
-          {
-            id: 'blk_stub_02',
-            type: 'paragraph',
-            text: 'This orientation covers the core safety rules for this site. Structuring is still stubbed — this canned module proves the pipeline end to end (Feature 2, Step 5).',
-            source_ref: { slide_index: 0 },
-          },
-          {
-            id: 'blk_stub_03',
-            type: 'hazard',
-            hazard: 'Slips, trips, and falls',
-            description: 'Wet or cluttered walkways are the most common cause of injury on site.',
-            severity: 'medium',
-            controls: [{ type: 'administrative', text: 'Keep walkways clear and report spills immediately.' }],
-            source_ref: { slide_index: 0 },
-          },
-        ],
-      },
-    ],
-    hazard_index: [
-      { block_id: 'blk_stub_03', module_id: 'mod_stub_01', hazard: 'Slips, trips, and falls', severity: 'medium' },
-    ],
-  }
-}
-
-// Canned Quiz for the still-stubbed generating_quiz stage, citing the canned
-// content model above via source_refs — what the approval screen displays
-// next to each question (contracts §4.4).
+// Canned Quiz for the still-stubbed generating_quiz stage (real AI quiz is M2 Step 2).
+// Cites blk_stub_03 from the old canned model — once the real structure stage runs,
+// the quiz stub's source_refs won't align, but the orchestration flow still proves out.
 function buildCannedQuiz(): Record<string, unknown> {
   return {
     meta: { pass_threshold: 0.8, attempts_allowed: 3, shuffle_questions: false, shuffle_options: false, question_count: 1 },
@@ -92,24 +36,18 @@ function buildCannedQuiz(): Record<string, unknown> {
   }
 }
 
-// Stages still stubbed (Step 3 only replaced extracting). Each maps to the
-// artifact slot it fills in JobRecord.artifacts (contracts §2). qa_review has
-// no artifact slot of its own — its verdict goes into qa_history instead.
-const STUBBED_STAGES: {
-  stage: 'structuring' | 'generating_quiz'
-  artifactKey: keyof JobRecord['artifacts']
-  buildPayload: (siteId: string) => Record<string, unknown>
-}[] = [
-  { stage: 'structuring', artifactKey: 'content_model', buildPayload: buildCannedContentModel },
-  { stage: 'generating_quiz', artifactKey: 'quiz', buildPayload: buildCannedQuiz },
-]
-
 function buildEnvelope(
   jobId: string,
   stage: string,
   payload: Record<string, unknown>,
-  options?: { stageImplVersion?: string; inputRefs?: Record<string, unknown> },
+  options?: {
+    stageImplVersion?: string
+    inputRefs?: Record<string, unknown>
+    kind?: 'code' | 'llm' | 'agent' | 'human'
+    model?: string
+  },
 ) {
+  const kind = options?.kind ?? 'code'
   return {
     job_id: jobId,
     stage,
@@ -117,9 +55,8 @@ function buildEnvelope(
     schema_version: '0.1',
     produced_at: new Date().toISOString(),
     produced_by: {
-      kind: 'code' as const,
-      // kind: "code" — extracting is a deterministic parse, not a model call
-      // (contracts §3); the still-stubbed stages keep the @stub-0.1 marker.
+      kind,
+      ...(options?.model ? { model: options.model } : {}),
       stage_impl_version: options?.stageImplVersion ?? `${stage}@stub-0.1`,
     },
     input_refs: options?.inputRefs ?? {},
@@ -161,10 +98,6 @@ async function storeArtifact(
   if (updateErr) throw updateErr
 }
 
-// Calls the standalone Python extractor service (Feature2-Pipeline-Skeleton-Brief.md
-// Step 3) over HTTP with a short-lived signed URL to the uploaded deck — the
-// extractor downloads the file itself rather than the deck's bytes flowing
-// through this function.
 async function callExtractor(supabase: ReturnType<typeof createAdminClient>, jobId: string, siteId: string) {
   const { data: job, error } = await supabase
     .from('generation_jobs')
@@ -201,16 +134,43 @@ async function callExtractor(supabase: ReturnType<typeof createAdminClient>, job
   return { deck: (await response.json()) as Record<string, unknown>, sourceAsset }
 }
 
-// Walks a job through queued -> extracting -> structuring -> generating_quiz ->
-// qa_review -> awaiting_approval (contracts §1). extracting is now a real
-// deterministic parse (Step 3); structuring/generating_quiz/qa_review stay
-// stubbed canned envelopes until M2.
+// Loads the extracted_deck artifact from Supabase storage and returns its payload.
+async function loadExtractedDeck(
+  supabase: ReturnType<typeof createAdminClient>,
+  jobId: string,
+): Promise<{ deck: Record<string, unknown>; ref: ArtifactRef }> {
+  const { data: jobData, error: jobErr } = await supabase
+    .from('generation_jobs')
+    .select('artifacts')
+    .eq('id', jobId)
+    .single()
+  if (jobErr) throw jobErr
+
+  const artifacts = jobData.artifacts as JobRecord['artifacts']
+  const ref = artifacts.extracted_deck
+  if (!ref) throw new Error('extracted_deck artifact missing — cannot run structure stage')
+
+  const { data: blob, error: dlErr } = await supabase.storage
+    .from(ARTIFACTS_BUCKET)
+    .download(ref.storage_key)
+  if (dlErr) throw dlErr
+
+  const envelope = JSON.parse(await blob.text()) as { payload: Record<string, unknown> }
+  return { deck: envelope.payload, ref }
+}
+
+// Walks a job through queued → extracting → structuring → generating_quiz →
+// qa_review → awaiting_approval (contracts §1).
+// extracting: real deterministic parse (M0 Step 3)
+// structuring: real Sonnet call (M2 Step 1)
+// generating_quiz / qa_review: stubbed canned envelopes until M2 Steps 2–3
 export const runGenerationJob = inngest.createFunction(
   { id: 'run-generation-job', triggers: [generationJobStart] },
   async ({ event, step }) => {
     const { jobId, siteId } = event.data
     const supabase = createAdminClient()
 
+    // ── Extracting (real) ──────────────────────────────────────────────────
     await step.run('enter-extracting', async () => {
       const { error } = await supabase
         .from('generation_jobs')
@@ -228,23 +188,44 @@ export const runGenerationJob = inngest.createFunction(
       await storeArtifact(supabase, jobId, siteId, 'extracted_deck', envelope)
     })
 
-    for (const { stage, artifactKey, buildPayload } of STUBBED_STAGES) {
-      await step.run(`enter-${stage}`, async () => {
-        const { error } = await supabase
-          .from('generation_jobs')
-          .update({ status: stage, current_stage: stage, updated_at: new Date().toISOString() })
-          .eq('id', jobId)
-        if (error) throw error
+    // ── Structuring (real Sonnet — M2 Step 1) ─────────────────────────────
+    await step.run('enter-structuring', async () => {
+      const { error } = await supabase
+        .from('generation_jobs')
+        .update({ status: 'structuring', current_stage: 'structuring', updated_at: new Date().toISOString() })
+        .eq('id', jobId)
+      if (error) throw error
+    })
+
+    await step.run('produce-structuring', async () => {
+      const { deck, ref: extractedRef } = await loadExtractedDeck(supabase, jobId)
+      const contentModel = await callStructure(deck, jobId, siteId)
+      const envelope = buildEnvelope(jobId, 'structuring', contentModel as unknown as Record<string, unknown>, {
+        stageImplVersion: STRUCTURE_STAGE_VERSION,
+        inputRefs: { extracted_deck_sha256: extractedRef.sha256 },
+        kind: 'llm',
+        model: STRUCTURE_MODEL,
       })
+      await storeArtifact(supabase, jobId, siteId, 'content_model', envelope)
+    })
 
-      await step.sleep(`pace-${stage}`, '2s')
+    // ── Generating quiz (stubbed — M2 Step 2) ─────────────────────────────
+    await step.run('enter-generating_quiz', async () => {
+      const { error } = await supabase
+        .from('generation_jobs')
+        .update({ status: 'generating_quiz', current_stage: 'generating_quiz', updated_at: new Date().toISOString() })
+        .eq('id', jobId)
+      if (error) throw error
+    })
 
-      await step.run(`produce-${stage}`, async () => {
-        const envelope = buildEnvelope(jobId, stage, buildPayload(siteId))
-        await storeArtifact(supabase, jobId, siteId, artifactKey, envelope)
-      })
-    }
+    await step.sleep('pace-generating_quiz', '2s')
 
+    await step.run('produce-generating_quiz', async () => {
+      const envelope = buildEnvelope(jobId, 'generating_quiz', buildCannedQuiz())
+      await storeArtifact(supabase, jobId, siteId, 'quiz', envelope)
+    })
+
+    // ── QA review (stubbed — always passes, M2 Step 3) ────────────────────
     await step.run('enter-qa_review', async () => {
       const { error } = await supabase
         .from('generation_jobs')
@@ -255,8 +236,6 @@ export const runGenerationJob = inngest.createFunction(
 
     await step.sleep('pace-qa_review', '2s')
 
-    // Stub QA always passes — the rework loop (needs_rework, rework_count++) is
-    // not exercised yet, but the columns/shape it needs already exist.
     await step.run('produce-qa_review', async () => {
       const verdictEntry: QAHistoryEntry = {
         attempt: 1,
@@ -282,6 +261,7 @@ export const runGenerationJob = inngest.createFunction(
       if (updateErr) throw updateErr
     })
 
+    // ── Awaiting approval ─────────────────────────────────────────────────
     await step.run('enter-awaiting_approval', async () => {
       const { error } = await supabase
         .from('generation_jobs')
