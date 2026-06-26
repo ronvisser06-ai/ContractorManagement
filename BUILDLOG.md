@@ -618,6 +618,38 @@ This tracks progress and lets you pick up exactly where you left off (Rule 19).
 
 **Context Usage**: Resumed from context-compacted session (Step 5a never got started in prior session) — fresh conversation before Step 5b.
 
+### Session 2026-06-25 — M1 / Step 5b — Expected-on-site View + Cross-company Worker Summary (Read Side)
+
+**What I Built**:
+- Migration `0013_expected_on_site_rls.sql`:
+  - `user_ids_activated_on_org_sites(uid)` SECURITY DEFINER helper — returns user_ids of workers activated on any site belonging to the caller's org. Used by the new `users` policy; using a helper avoids a potential circular RLS reference (a naïve inline subquery on `site_worker_activations` ↔ `sites` ↔ `users` could recurse under future policy changes).
+  - `"users: read if activated on org site"` RLS policy — enables Client Admin and Foreman (M4) to read worker profiles for workers activated on their org's sites (§4.2 bridge-row gate). Without this, the embedded `users(given_name, family_name)` join in the expected-on-site query would silently return null.
+  - `worker_company_summary(p_worker_id uuid) → jsonb` SECURITY DEFINER RPC — returns `{total_company_count, shared_companies}`. Total count bypasses RLS so all company memberships (including companies not linked to the viewer's org) are counted. Shared company names are scoped to `auth.uid()` via `org_memberships` × `client_company_links` — the full cross-client picture is never exposed. Restricted to `authenticated` role via REVOKE/GRANT.
+- `web/src/app/app/sites/page.tsx`: added "Expected on site (N)" section per site for Client Admin. Fetches `site_worker_activations` (status=active, for all org's site_ids) with embedded `users` and `contractor_companies` joins in parallel with the existing assignments + links queries. Builds `activatedBySite` map; renders worker names + company inline under each site card.
+- `web/src/app/app/contractors/page.tsx`: added `user_id` to `WorkerSlice` interface and worker query; added `WorkerCompanySummary` interface. For all `account_created` workers across active linked companies, calls `worker_company_summary` in parallel (Promise.all). Renders inline per worker: "Works for N companies · Shared with you: [names]" — shown only when `total_company_count > 1`.
+- `web/src/test/expected-on-site.test.mts`: 5 RLS/RPC integration tests from user-JWT clients — activated worker visible; non-activated worker excluded; Client Admin reads worker profile via migration 0013 policy; linked viewer gets correct total + shared names from RPC; unrelated viewer gets correct total but empty shared list.
+
+**What Went Wrong**:
+- Nothing material. The RLS gap (client_admin cannot read worker `users` rows without a dedicated policy) was caught during planning and addressed by migration 0013 before any UI code was written.
+
+**Verified**:
+- `tsc --noEmit`, `npm run lint` (0 errors), `npm run build` all clean.
+- `npm test` → 71/71 pass (5 new + 66 existing, all unaffected).
+- Migration applied via `npm run db:migrate` — applied cleanly.
+
+**What's Next**:
+- **M1 complete** — all five steps (tenancy, sites, contractor CRM, worker enrollment + lifecycle, crew activation + read) are done. Move to M2 — Generation Pipeline + bounded Approval Editor: real extract/structure/quiz/QA loop with the full Anthropic pipeline and side-by-side approval editor.
+
+**Rules Followed**:
+- ✓ Read design docs (M1-ContractorCRM-Brief §4.4/§4.5, HowDesign-DataModel §4.2/§4.4/§4.5) before building (Rules 1, 2)
+- ✓ Read side only — foreman-facing expected-on-site UI deferred to M4 as specified
+- ✓ Migration 0013 required and included — without it, the embedded users join returns null for client_admin
+- ✓ SECURITY DEFINER used for total_company_count (cross-org visibility is intentional by spec) with output narrowed by auth.uid() scoping
+- ✓ TypeScript strict, lint, and build all clean; 71 tests green
+- ✓ Committed and pushed (Rule 9)
+
+**Context Usage**: Resumed from context-compacted session — fresh conversation for Step 5b.
+
 ---
 
 ## Track Progress

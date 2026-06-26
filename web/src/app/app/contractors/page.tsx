@@ -30,8 +30,14 @@ interface PendingInvite {
 
 interface WorkerSlice {
   company_id: string
+  user_id: string
   invited_email: string | null
   onboarding_status: string
+}
+
+interface WorkerCompanySummary {
+  total_company_count: number
+  shared_companies: string[]
 }
 
 const LINK_STATUS_STYLES: Record<string, string> = {
@@ -105,25 +111,44 @@ export default async function ContractorsPage({ searchParams }: Props) {
 
   // Client Admin sliced worker view: fetch workers for all active linked companies.
   // RLS "company_memberships: read if member or linked" permits linked client orgs.
-  // We only get invited_email + onboarding_status — full user profiles are gated on
-  // site activation (HowDesign-DataModel §4.2, deferred until M3).
+  // user_id is fetched so we can call worker_company_summary for registered workers.
   const activeCompanyIds = links.filter((l) => l.status === 'active').map((l) => l.company_id)
   const workersByCompany = new Map<string, WorkerSlice[]>()
+  const summaryByUser = new Map<string, WorkerCompanySummary>()
 
   if (activeCompanyIds.length > 0) {
     const { data: rawWorkers } = await supabase
       .from('company_memberships')
-      .select('company_id, invited_email, onboarding_status')
+      .select('company_id, user_id, invited_email, onboarding_status')
       .in('company_id', activeCompanyIds)
       .eq('status', 'active')
       .contains('roles', ['worker'])
       .order('created_at', { ascending: true })
 
-    for (const w of (rawWorkers ?? []) as WorkerSlice[]) {
+    const workers = (rawWorkers ?? []) as WorkerSlice[]
+    for (const w of workers) {
       const arr = workersByCompany.get(w.company_id) ?? []
       arr.push(w)
       workersByCompany.set(w.company_id, arr)
     }
+
+    // §4.4 cross-company summary: fetch for workers who have completed registration.
+    // The SECURITY DEFINER RPC computes total_company_count across ALL memberships
+    // (bypassing RLS) and returns names only for companies the viewer's org also links.
+    const registeredUserIds = [
+      ...new Set(
+        workers
+          .filter((w) => w.onboarding_status === 'account_created')
+          .map((w) => w.user_id),
+      ),
+    ]
+
+    await Promise.all(
+      registeredUserIds.map(async (userId) => {
+        const { data } = await supabase.rpc('worker_company_summary', { p_worker_id: userId })
+        if (data) summaryByUser.set(userId, data as WorkerCompanySummary)
+      }),
+    )
   }
 
   // Construct the base URL for dev-mode link display
@@ -210,7 +235,7 @@ export default async function ContractorsPage({ searchParams }: Props) {
                     </div>
                   )}
 
-                  {/* Client Admin sliced worker view — only shown for active links */}
+                  {/* Client Admin sliced worker view + §4.4 cross-company summary */}
                   {isClientAdmin && link.status === 'active' && (
                     <div className="border-t pt-3">
                       <p className="mb-2 text-xs font-medium text-muted-foreground">
@@ -219,15 +244,28 @@ export default async function ContractorsPage({ searchParams }: Props) {
                       {workers.length === 0 ? (
                         <p className="text-xs text-muted-foreground">No workers enrolled yet.</p>
                       ) : (
-                        <ul className="space-y-1">
-                          {workers.map((w, i) => (
-                            <li key={i} className="flex items-center justify-between gap-2">
-                              <span className="truncate text-sm text-muted-foreground">
-                                {w.invited_email ?? '—'}
-                              </span>
-                              <OnboardingBadge status={w.onboarding_status} />
-                            </li>
-                          ))}
+                        <ul className="space-y-2">
+                          {workers.map((w, i) => {
+                            const summary = summaryByUser.get(w.user_id)
+                            return (
+                              <li key={i} className="space-y-0.5">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="truncate text-sm text-muted-foreground">
+                                    {w.invited_email ?? '—'}
+                                  </span>
+                                  <OnboardingBadge status={w.onboarding_status} />
+                                </div>
+                                {summary && summary.total_company_count > 1 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Works for {summary.total_company_count} companies
+                                    {summary.shared_companies.length > 0 && (
+                                      <> · Shared with you: {summary.shared_companies.join(', ')}</>
+                                    )}
+                                  </p>
+                                )}
+                              </li>
+                            )
+                          })}
                         </ul>
                       )}
                     </div>
