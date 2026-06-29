@@ -1014,6 +1014,24 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-06-28 — Defect Step 4.5b: graceful re-run after a failed job + Retry button
+
+**What I Built**:
+- `retryJob` server action (`web/src/app/app/jobs/[jobId]/actions.ts`): selects job by id (RLS-scoped), guards `status === 'failed' || 'cancelled'`, resets to `queued` (clearing error), re-fires `generationJobStart` Inngest event. Non-retryable states → friendly `?notice=` redirect. No re-upload; existing `source_asset` and artifacts preserved (contracts §1).
+- Retry button in `JobTracker` (`job-tracker.tsx`): a `<form action={retryJob}>` with a hidden `job_id` field renders below the status line when `job.status === 'failed' || 'cancelled'`. Tracked via realtime, so it disappears as soon as the job re-enters `extracting`.
+- Notice param in `page.tsx`: added `notice?: string` to searchParams; renders as a blue info banner (distinct from the red error banner). Fixes a gap where `createJob`'s friendly `?notice=` redirects were silently dropped.
+- 2 new tests in `src/test/create-job-idempotency.test.mts`: (1) `retryJob` — failed job: update-by-id resets to `queued`, clears `error`; (2) `retryJob` — non-retryable job: select returns non-failed status (no update performed). Both mirror the exact DB queries the action runs, using the same no-mock/real-Supabase pattern.
+
+**What Went Wrong**: Nothing — tsc/lint/build clean on first pass. 5/5 idempotency tests pass; pre-existing Opus JSON parse flake in `pipeline-qa.test.mts` unrelated.
+
+**Rules Followed**:
+- ✓ Read contracts §1 (failed → retry, preserve artifacts) before building
+- ✓ Retry button tracks realtime state (disappears when job re-enters extracting)
+- ✓ `notice` param fix closes a gap opened when `createJob`'s redirect paths were first added
+- ✓ TypeScript strict, lint, and build all clean; 5/5 targeted tests green
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

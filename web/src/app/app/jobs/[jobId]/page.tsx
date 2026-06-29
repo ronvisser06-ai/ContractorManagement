@@ -20,12 +20,12 @@ async function downloadArtifactPayload<T>(storageKey: string): Promise<T> {
 
 interface Props {
   params: Promise<{ jobId: string }>
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; notice?: string }>
 }
 
 export default async function JobPage({ params, searchParams }: Props) {
   const { jobId } = await params
-  const { error: errorParam } = await searchParams
+  const { error: errorParam, notice: noticeParam } = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -98,6 +98,11 @@ export default async function JobPage({ params, searchParams }: Props) {
       {errorParam && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {errorParam}
+        </div>
+      )}
+      {noticeParam && (
+        <div className="rounded-md border border-blue-500/50 bg-blue-500/10 px-4 py-3 text-sm text-blue-700">
+          {noticeParam}
         </div>
       )}
       <JobTracker jobId={jobId} initialJob={job} />

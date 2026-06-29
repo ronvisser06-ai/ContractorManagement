@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { JobRecord } from '@/contracts/types'
+import { retryJob } from './actions'
 
 export type JobRow = Pick<
   JobRecord,
@@ -113,6 +114,17 @@ export function JobTracker({ jobId, initialJob }: Props) {
 
       {currentIndex < 0 && (
         <p className="text-sm text-muted-foreground">Status: {STAGE_LABELS[job.status] ?? job.status}</p>
+      )}
+      {(job.status === 'failed' || job.status === 'cancelled') && (
+        <form action={retryJob}>
+          <input type="hidden" name="job_id" value={jobId} />
+          <button
+            type="submit"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Retry generation
+          </button>
+        </form>
       )}
 
       {job.qa_flagged && (

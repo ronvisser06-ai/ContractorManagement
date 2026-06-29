@@ -12,15 +12,15 @@
       "module_id": "mod_01",
       "objective_id": "obj_01_1",
       "source_refs": [
-        "blk_01_03"
+        "blk_01_02"
       ],
       "type": "single_choice",
       "difficulty": "recall",
-      "stem": "What is the primary purpose of the Proton H2 Safety Orientation?",
+      "stem": "What is the primary purpose of Proton H2's Safety Orientation?",
       "options": [
         {
           "id": "opt_a",
-          "text": "To introduce employees to Proton H2's executive leadership team"
+          "text": "To introduce employees to their co-workers and site supervisors"
         },
         {
           "id": "opt_b",
@@ -28,32 +28,58 @@
         },
         {
           "id": "opt_c",
-          "text": "To fulfill a one-time provincial licensing requirement for new construction sites"
+          "text": "To describe the benefits package available to Proton H2 employees"
         },
         {
           "id": "opt_d",
-          "text": "To review Proton H2's financial policies and operational procedures"
+          "text": "To outline the performance review process for new workers"
         }
       ],
       "correct_option_ids": [
         "opt_b"
       ],
-      "rationale": "As stated in blk_01_03, the purpose of the Safety Orientation is to provide employees or contractors with knowledge of basic Health and Safety Regulations, Responsibilities, and Safe Work Practices that apply to all Proton H2 locations."
+      "rationale": "According to blk_01_02, the purpose of the Safety Orientation is to provide employees and contractors with knowledge of basic Health and Safety Regulations, Responsibilities, and Safe Work Practices that apply to all Proton H2 locations."
     },
     {
       "id": "q_02",
       "module_id": "mod_01",
       "objective_id": "obj_01_2",
       "source_refs": [
-        "blk_01_06"
+        "blk_01_02",
+        "blk_01_04"
       ],
-      "type": "single_choice",
+      "type": "true_false",
       "difficulty": "recall",
-      "stem": "Which of the following is one of the five outcomes a worker will be able to demonstrate upon completing this orientation?",
+      "stem": "True or False: As an employee or contractor of Proton H2, defining your roles and responsibilities is one of the stated objectives of this Safety Orientation.",
       "options": [
         {
           "id": "opt_a",
-          "text": "Negotiate personal protective equipment allowances with management"
+          "text": "True"
+        },
+        {
+          "id": "opt_b",
+          "text": "False"
+        }
+      ],
+      "correct_option_ids": [
+        "opt_a"
+      ],
+      "rationale": "blk_01_04 explicitly lists 'Define your roles and responsibilities' as one of the objectives of the Safety Orientation."
+    },
+    {
+      "id": "q_03",
+      "module_id": "mod_01",
+      "objective_id": "obj_01_3",
+      "source_refs": [
+        "blk_01_04"
+      ],
+      "type": "single_choice",
+      "difficulty": "recall",
+      "stem": "Which of the following is an objective of Proton H2's Safety Orientation related to legislation?",
+      "options": [
+        {
+          "id": "opt_a",
+          "text": "Memorize all sections of the federal Canada Labour Code"
         },
         {
           "id": "opt_b",
@@ -61,146 +87,78 @@
         },
         {
           "id": "opt_c",
-          "text": "Conduct independent incident investigations without supervisor approval"
+          "text": "Submit a legislative compliance report to management"
         }
       ],
       "correct_option_ids": [
         "opt_b"
       ],
-      "rationale": "According to blk_01_06, one of the five stated learning outcomes is that workers will be able to access provincial OHS legislation."
-    },
-    {
-      "id": "q_03",
-      "module_id": "mod_01",
-      "objective_id": "obj_01_2",
-      "source_refs": [
-        "blk_01_06"
-      ],
-      "type": "single_choice",
-      "difficulty": "application",
-      "stem": "A new Proton H2 contractor asks where they can find the company's Health and Safety Policy. Based on the orientation outcomes, which response is correct?",
-      "options": [
-        {
-          "id": "opt_a",
-          "text": "They should not need to access the policy; their supervisor will relay all relevant rules verbally"
-        },
-        {
-          "id": "opt_b",
-          "text": "One of the orientation outcomes is to be able to locate Proton H2's Health and Safety Policy and reference its content"
-        },
-        {
-          "id": "opt_c",
-          "text": "The policy is confidential and only available to permanent employees after six months of service"
-        }
-      ],
-      "correct_option_ids": [
-        "opt_b"
-      ],
-      "rationale": "blk_01_06 lists locating and referencing Proton H2's Health and Safety Policy as the first of the five orientation outcomes, meaning all employees and contractors should be able to do this after completing orientation."
+      "rationale": "blk_01_04 lists 'Access provincial OHS legislations' as a stated objective of the Safety Orientation."
     },
     {
       "id": "q_04",
       "module_id": "mod_02",
       "objective_id": "obj_02_1",
       "source_refs": [
-        "blk_02_04",
-        "blk_02_05"
+        "blk_02_04"
       ],
       "type": "single_choice",
       "difficulty": "recall",
-      "stem": "According to Proton H2's health and safety expectations, who is accountable for health and safety performance?",
+      "stem": "When must accidents, incidents, and near misses be reported at Proton H2?",
       "options": [
         {
           "id": "opt_a",
-          "text": "Only the site supervisor and HSE manager"
+          "text": "Within 24 hours of the event"
         },
         {
           "id": "opt_b",
-          "text": "Only contractors, since permanent employees are covered under a separate policy"
+          "text": "At the end of the work shift"
         },
         {
           "id": "opt_c",
-          "text": "Everyone"
+          "text": "Immediately"
         },
         {
           "id": "opt_d",
-          "text": "The provincial government occupational health and safety officer assigned to the site"
+          "text": "Only if medical attention is required"
         }
       ],
       "correct_option_ids": [
         "opt_c"
       ],
-      "rationale": "blk_02_04 states explicitly that 'Everyone is accountable for their health and safety performance,' indicating this responsibility applies to all individuals on site."
+      "rationale": "blk_02_04 states that all accidents, incidents, and near misses must be reported immediately and will be investigated."
     },
     {
       "id": "q_05",
       "module_id": "mod_02",
       "objective_id": "obj_02_1",
       "source_refs": [
-        "blk_02_05"
+        "blk_02_03"
       ],
-      "type": "single_choice",
-      "difficulty": "application",
-      "stem": "A worker witnesses a near miss on a Proton H2 worksite but is unsure whether it needs to be reported since no one was hurt. What should the worker do?",
+      "type": "true_false",
+      "difficulty": "recall",
+      "stem": "True or False: Only supervisors and managers are accountable for health and safety performance at Proton H2.",
       "options": [
         {
           "id": "opt_a",
-          "text": "Report it only if there was property damage involved"
+          "text": "True"
         },
         {
           "id": "opt_b",
-          "text": "Report it immediately, because all accidents, incidents, and near misses must be reported and will be investigated"
-        },
-        {
-          "id": "opt_c",
-          "text": "Wait until the end of the shift to discuss it with the supervisor informally"
+          "text": "False"
         }
       ],
       "correct_option_ids": [
         "opt_b"
       ],
-      "rationale": "blk_02_05 states that all accidents, incidents, and near misses must be reported immediately and will be investigated, which includes near misses regardless of whether injury occurred."
+      "rationale": "blk_02_03 states that everyone is accountable for their health and safety performance, not only supervisors and managers."
     },
     {
       "id": "q_06",
       "module_id": "mod_02",
       "objective_id": "obj_02_2",
       "source_refs": [
-        "blk_02_09"
-      ],
-      "type": "single_choice",
-      "difficulty": "recall",
-      "stem": "Which of the following is one of the HSE commitments outlined in Proton H2's Health and Safety Policy?",
-      "options": [
-        {
-          "id": "opt_a",
-          "text": "Limit safety training to supervisors and management only"
-        },
-        {
-          "id": "opt_b",
-          "text": "Comply with all applicable HSE legislation"
-        },
-        {
-          "id": "opt_c",
-          "text": "Delegate environmental protection responsibilities solely to government regulators"
-        },
-        {
-          "id": "opt_d",
-          "text": "Conduct safety audits only when requested by a client"
-        }
-      ],
-      "correct_option_ids": [
-        "opt_b"
-      ],
-      "rationale": "blk_02_09 lists 'Comply with all applicable HSE legislation' as one of the HSE commitments identified in Proton H2's Health and Safety Policy."
-    },
-    {
-      "id": "q_07",
-      "module_id": "mod_02",
-      "objective_id": "obj_02_2",
-      "source_refs": [
-        "blk_02_10",
-        "blk_02_12"
+        "blk_02_06"
       ],
       "type": "single_choice",
       "difficulty": "recall",
@@ -208,21 +166,54 @@
       "options": [
         {
           "id": "opt_a",
-          "text": "At the beginning of the Health and Safety Program Manual"
+          "text": "Posted on the safety bulletin board in the break room"
         },
         {
           "id": "opt_b",
-          "text": "Posted on the provincial OH&S government website"
+          "text": "At the beginning of the Health and Safety Program Manual"
         },
         {
           "id": "opt_c",
-          "text": "In the employee payroll and benefits handbook"
+          "text": "In the employee onboarding email from HR"
+        },
+        {
+          "id": "opt_d",
+          "text": "Appended at the end of the Health and Safety Program Manual"
         }
       ],
       "correct_option_ids": [
-        "opt_a"
+        "opt_b"
       ],
-      "rationale": "blk_02_10 states that the Proton H2 HSE Policy can be found at the beginning of the Health and Safety Program Manual."
+      "rationale": "blk_02_06 states that the Proton H2 HSE Policy can be found at the beginning of the Health and Safety Program Manual."
+    },
+    {
+      "id": "q_07",
+      "module_id": "mod_02",
+      "objective_id": "obj_02_2",
+      "source_refs": [
+        "blk_02_07"
+      ],
+      "type": "single_choice",
+      "difficulty": "application",
+      "stem": "A new contractor is unsure where to find the Proton H2 Health and Safety Program Manual. According to Proton H2 guidelines, which of the following is an acceptable place to locate it?",
+      "options": [
+        {
+          "id": "opt_a",
+          "text": "Request a copy be mailed to their home address"
+        },
+        {
+          "id": "opt_b",
+          "text": "Find it online or as a binder in the office or onsite"
+        },
+        {
+          "id": "opt_c",
+          "text": "Ask a co-worker to summarize the relevant sections verbally"
+        }
+      ],
+      "correct_option_ids": [
+        "opt_b"
+      ],
+      "rationale": "blk_02_07 states that the Health and Safety Program Manual can be found online or as a binder in the office or onsite."
     },
     {
       "id": "q_08",
@@ -233,29 +224,29 @@
       ],
       "type": "single_choice",
       "difficulty": "recall",
-      "stem": "According to the hierarchy of controls used during risk assessments, which control type is the MOST preferred method for addressing a workplace hazard?",
+      "stem": "Which of the following correctly lists the hierarchy of hazard controls from most preferred to least preferred, as described in Proton H2's risk assessment process?",
       "options": [
         {
           "id": "opt_a",
-          "text": "Personal protective equipment (PPE)"
+          "text": "PPE → Administration → Engineering → Substitution → Elimination"
         },
         {
           "id": "opt_b",
-          "text": "Administrative controls such as changes in procedures"
+          "text": "Elimination → Substitution → Engineering → Administration → PPE"
         },
         {
           "id": "opt_c",
-          "text": "Eliminating the hazard completely"
+          "text": "Administration → Elimination → PPE → Engineering → Substitution"
         },
         {
           "id": "opt_d",
-          "text": "Substituting something to lessen the identified hazard"
+          "text": "Engineering → Elimination → Administration → PPE → Substitution"
         }
       ],
       "correct_option_ids": [
-        "opt_c"
+        "opt_b"
       ],
-      "rationale": "blk_03_02 describes the hierarchy of controls in order from most to least preferred; elimination of the hazard completely is listed first, making it the most preferred control method."
+      "rationale": "blk_03_02 lists the hierarchy of controls in order: Elimination, Substitution, Engineering, Administration, and PPE as the last line of defense."
     },
     {
       "id": "q_09",
@@ -265,26 +256,30 @@
         "blk_03_02"
       ],
       "type": "single_choice",
-      "difficulty": "recall",
-      "stem": "Which of the following is an example of a PPE control as described in the hierarchy of controls?",
+      "difficulty": "application",
+      "stem": "A worker identifies a hazardous chemical used in a process. Management decides to replace it with a less dangerous substance. Which level of the hierarchy of hazard controls does this represent?",
       "options": [
         {
           "id": "opt_a",
-          "text": "Installing a physical guard or barrier around a piece of equipment"
+          "text": "Elimination"
         },
         {
           "id": "opt_b",
-          "text": "Providing workers with gloves, safety glasses, hard hats, and steel-toed boots"
+          "text": "Engineering"
         },
         {
           "id": "opt_c",
-          "text": "Changing the work procedure to reduce exposure to the hazard"
+          "text": "Substitution"
+        },
+        {
+          "id": "opt_d",
+          "text": "Administration"
         }
       ],
       "correct_option_ids": [
-        "opt_b"
+        "opt_c"
       ],
-      "rationale": "blk_03_02 defines PPE controls as providing protective equipment such as gloves, safety glasses, hard hats, and steel-toed boots to create a barrier between the worker and hazards."
+      "rationale": "blk_03_02 defines substitution as substituting something to lessen or eliminate the identified hazard, which matches replacing the chemical with a less dangerous alternative."
     },
     {
       "id": "q_10",
@@ -294,90 +289,90 @@
         "blk_03_02"
       ],
       "type": "single_choice",
-      "difficulty": "application",
-      "stem": "A risk assessment identifies a chemical exposure hazard. Engineering controls are not feasible and the process cannot be changed. According to the hierarchy of controls, what should be applied next?",
+      "difficulty": "recall",
+      "stem": "According to Proton H2's hazard control guidelines, which of the following is an example of Personal Protective Equipment (PPE)?",
       "options": [
         {
           "id": "opt_a",
-          "text": "PPE, since it is the next control in the hierarchy after administrative controls and serves as the last line of defense"
+          "text": "Installing a machine guard around moving parts"
         },
         {
           "id": "opt_b",
-          "text": "Eliminate all work in the area permanently"
+          "text": "Changing a work procedure to reduce exposure to a hazard"
         },
         {
           "id": "opt_c",
-          "text": "File a report with the provincial regulator and wait for guidance before proceeding"
+          "text": "Wearing safety glasses, hard hats, and steel-toed boots"
         }
       ],
       "correct_option_ids": [
-        "opt_a"
+        "opt_c"
       ],
-      "rationale": "blk_03_02 lists the hierarchy of controls from most to least preferred as: elimination, substitution, engineering controls, administrative controls, and finally PPE — so when higher-order controls are not feasible, PPE is applied as the last protective measure."
+      "rationale": "blk_03_02 identifies PPE as protective equipment such as gloves, safety glasses, hard hats, and steel-toed boots that create a barrier between the worker and the hazard."
     },
     {
       "id": "q_11",
       "module_id": "mod_04",
       "objective_id": "obj_04_1",
       "source_refs": [
-        "blk_04_02",
-        "blk_04_03"
+        "blk_04_01",
+        "blk_04_02"
       ],
       "type": "single_choice",
       "difficulty": "recall",
-      "stem": "Under provincial OH&S legislation, what is the responsibility of workers regarding health and safety?",
+      "stem": "Under provincial OH&S legislation, what is the employer's primary responsibility regarding workers?",
       "options": [
         {
           "id": "opt_a",
-          "text": "Workers only need to follow safety rules when directly observed by their supervisor"
+          "text": "To provide workers with a detailed job description before beginning work"
         },
         {
           "id": "opt_b",
-          "text": "Workers must take reasonable care and attention to protect the health and safety of all workers and others in or near where Proton H2 and its contractors are working"
+          "text": "To do everything practicable to ensure the health, safety, and welfare of all workers and ensure they are aware of their rights and duties"
         },
         {
           "id": "opt_c",
-          "text": "Workers are responsible only for their own personal safety, not the safety of others"
+          "text": "To ensure workers complete a minimum of 40 hours of safety training annually"
+        },
+        {
+          "id": "opt_d",
+          "text": "To assign a dedicated safety officer to each work crew"
         }
       ],
       "correct_option_ids": [
         "opt_b"
       ],
-      "rationale": "blk_04_03 states that workers must take reasonable care and attention to protect the health and safety of all workers and others in or in the vicinity of work being done by Proton H2 and its contractors."
+      "rationale": "blk_04_01 states that provincial legislation requires owners and employers to do everything practicable to ensure the health, safety, and welfare of all workers, and to ensure workers are aware of their rights and duties."
     },
     {
       "id": "q_12",
       "module_id": "mod_05",
       "objective_id": "obj_05_1",
       "source_refs": [
-        "blk_05_02",
-        "blk_05_03"
+        "blk_05_01",
+        "blk_05_02"
       ],
       "type": "single_choice",
       "difficulty": "recall",
-      "stem": "What should a worker do in the event of an emergency at a Proton H2 worksite?",
+      "stem": "In the event of an emergency at a Proton H2 worksite, which number should you contact?",
       "options": [
         {
           "id": "opt_a",
-          "text": "Contact the nearest provincial emergency services office during business hours only"
+          "text": "(403) 000 0000 — the main head office telephone number"
         },
         {
           "id": "opt_b",
-          "text": "Send an email to the head office in Calgary and await a response"
+          "text": "911 — the local emergency services number only"
         },
         {
           "id": "opt_c",
-          "text": "Contact the 24-Hour Emergency Number: 1 (877) 000 0000"
-        },
-        {
-          "id": "opt_d",
-          "text": "Wait for the site supervisor to arrive before taking any action"
+          "text": "1 (877) 000 0000 — the 24-hour emergency number"
         }
       ],
       "correct_option_ids": [
         "opt_c"
       ],
-      "rationale": "blk_05_03 states that in the event of an emergency, workers must contact the 24-Hour Emergency Number: 1 (877) 000 0000, which is also confirmed in blk_05_02."
+      "rationale": "blk_05_02 states that in the event of an emergency, workers should contact the 24-hour emergency number: 1 (877) 000 0000, as also listed in blk_05_01."
     }
   ],
   "coverage_map": {
@@ -385,8 +380,14 @@
       "q_01"
     ],
     "obj_01_2": [
-      "q_02",
+      "q_02"
+    ],
+    "obj_01_3": [
       "q_03"
+    ],
+    "obj_01_4": [
+      "q_01",
+      "q_02"
     ],
     "obj_02_1": [
       "q_04",

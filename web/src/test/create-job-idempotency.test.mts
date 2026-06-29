@@ -164,6 +164,92 @@ test('awaiting_approval job: pre-check finds it so createJob redirects rather th
   await admin.from('generation_jobs').delete().eq('id', jobId)
 })
 
+// ── retryJob mechanics ────────────────────────────────────────────────────────
+// retryJob selects the job by id (not idempotency key), checks status, then
+// runs the same queued-reset update as the failed-branch of createJob.
+
+test('retryJob: failed job — update by id resets to queued and clears error', async () => {
+  const jobId = `job_${ulid()}`
+  const idemKey = `${siteId}:sha256:retry01${RUN_ID}`
+
+  const { error: insertErr } = await userClient.from('generation_jobs').insert({
+    id: jobId,
+    org_id: orgId,
+    site_id: siteId,
+    created_by: userId,
+    idempotency_key: idemKey,
+    status: 'failed',
+    current_stage: 'extracting',
+    error: { error: 'extractor timeout', code: 'EXTRACT_TIMEOUT' },
+  })
+  assert.equal(insertErr, null, `seed failed: ${insertErr?.message}`)
+
+  // Step 1: retryJob selects by id (mirrors the action's .select('id, status, site_id, org_id'))
+  const { data: job, error: selectErr } = await userClient
+    .from('generation_jobs')
+    .select('id, status, site_id, org_id')
+    .eq('id', jobId)
+    .maybeSingle()
+  assert.equal(selectErr, null)
+  assert.ok(job, 'select by id must find the job')
+  assert.equal(job.status, 'failed')
+
+  // Step 2: retryJob update (mirrors the action's status-reset block)
+  const { error: updateErr } = await userClient
+    .from('generation_jobs')
+    .update({ status: 'queued', current_stage: 'queued', error: null, updated_at: new Date().toISOString() })
+    .eq('id', jobId)
+  assert.equal(updateErr, null, `retry update failed: ${updateErr?.message}`)
+
+  // Verify via admin — job is now queued with error cleared
+  const { data: retried } = await admin
+    .from('generation_jobs')
+    .select('status, current_stage, error')
+    .eq('id', jobId)
+    .single()
+  assert.equal(retried?.status, 'queued')
+  assert.equal(retried?.current_stage, 'queued')
+  assert.equal(retried?.error, null)
+
+  await admin.from('generation_jobs').delete().eq('id', jobId)
+})
+
+test('retryJob: non-retryable job — select returns non-failed status so action redirects with notice', async () => {
+  const jobId = `job_${ulid()}`
+  const idemKey = `${siteId}:sha256:retry02${RUN_ID}`
+
+  const { error: insertErr } = await userClient.from('generation_jobs').insert({
+    id: jobId,
+    org_id: orgId,
+    site_id: siteId,
+    created_by: userId,
+    idempotency_key: idemKey,
+    status: 'awaiting_approval',
+    current_stage: 'awaiting_approval',
+  })
+  assert.equal(insertErr, null, `seed failed: ${insertErr?.message}`)
+
+  // retryJob select — status is awaiting_approval; action redirects with notice, no update
+  const { data: job, error: selectErr } = await userClient
+    .from('generation_jobs')
+    .select('id, status, site_id, org_id')
+    .eq('id', jobId)
+    .maybeSingle()
+  assert.equal(selectErr, null)
+  assert.ok(job, 'select must find the job')
+  assert.equal(job.status, 'awaiting_approval')
+  // The action branches on status !== 'failed' && !== 'cancelled' → redirect with notice.
+  // Confirm the row is unchanged (no erroneous reset).
+  const { data: unchanged } = await admin
+    .from('generation_jobs')
+    .select('status')
+    .eq('id', jobId)
+    .single()
+  assert.equal(unchanged?.status, 'awaiting_approval')
+
+  await admin.from('generation_jobs').delete().eq('id', jobId)
+})
+
 test('no existing job: insert succeeds (normal new-job path)', async () => {
   const jobId = `job_${ulid()}`
   const idemKey = `${siteId}:sha256:112233${RUN_ID}`

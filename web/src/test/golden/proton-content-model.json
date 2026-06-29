@@ -3,7 +3,7 @@
     "title": "Occupational Health and Safety Orientation",
     "site_id": "site_eval",
     "language": "en",
-    "estimated_minutes": 20,
+    "estimated_minutes": 15,
     "reading_level": "grade_8"
   },
   "branding": {
@@ -31,32 +31,19 @@
       "learning_objectives": [
         {
           "id": "obj_01_1",
-          "text": "Locate Proton H2's Health and Safety Policy and reference its content.",
+          "text": "State the purpose of the Proton H2 Safety Orientation and identify the knowledge areas it covers.",
           "source_block_ids": [
-            "blk_01_03",
-            "blk_01_04"
+            "blk_01_01",
+            "blk_01_02",
+            "blk_01_03"
           ]
         },
         {
           "id": "obj_01_2",
-          "text": "Define your roles and responsibilities as an employee or contractor of Proton H2.",
+          "text": "List the five key outcomes a worker should be able to demonstrate upon completing this orientation.",
           "source_block_ids": [
-            "blk_01_04"
-          ]
-        },
-        {
-          "id": "obj_01_3",
-          "text": "Locate and reference your safety management systems and access provincial OHS legislation.",
-          "source_block_ids": [
-            "blk_01_04"
-          ]
-        },
-        {
-          "id": "obj_01_4",
-          "text": "Understand the basic requirements for health and safety on Proton H2 work sites.",
-          "source_block_ids": [
-            "blk_01_02",
-            "blk_01_04"
+            "blk_01_04",
+            "blk_01_05"
           ]
         }
       ],
@@ -64,35 +51,49 @@
         {
           "id": "blk_01_01",
           "type": "image",
+          "asset_id": "ast_0_1",
+          "alt": "Occupational Health and Safety Orientation title slide",
           "source_ref": {
             "slide_index": 0
-          },
-          "asset_id": "ast_0_1",
-          "alt": "Occupational Health and Safety Orientation title slide image"
+          }
         },
         {
           "id": "blk_01_02",
           "type": "paragraph",
+          "text": "Hazards exist in every workplace. Everyone needs to be aware of these hazards, and the potential risks they may pose. Safety training helps ensure that you have the knowledge to work safely every day, because you have the right to a safe and healthy workplace.",
           "source_ref": {
             "slide_index": 1
-          },
-          "text": "Hazards exist in every workplace. Everyone needs to be aware of these hazards, and the potential risks they may pose. Safety training helps ensure that you have the knowledge to work safely every day, because you have the right to a safe and healthy workplace. The Purpose of this Safety Orientation is to provide you, as an employee or contractor of Proton H2, with the knowledge of basic Health and Safety Regulations, Responsibilities and Safe Work Practices that apply to all locations operated by Proton H2."
+          }
         },
         {
           "id": "blk_01_03",
-          "type": "image",
+          "type": "key_point",
+          "text": "The Purpose of this Safety Orientation is to provide you, as an employee or contractor of Proton H2, with the knowledge of basic Health and Safety Regulations, Responsibilities and Safe Work Practices that apply to all locations operated by Proton H2.",
           "source_ref": {
             "slide_index": 1
-          },
-          "asset_id": "ast_1_2",
-          "alt": "Introduction slide supporting image"
+          }
         },
         {
           "id": "blk_01_04",
-          "type": "list",
+          "type": "image",
+          "asset_id": "ast_1_2",
+          "alt": "Introduction slide illustration",
+          "source_ref": {
+            "slide_index": 1
+          }
+        },
+        {
+          "id": "blk_01_05",
+          "type": "heading",
+          "level": 2,
+          "text": "By the end of this Orientation, you will be able to:",
           "source_ref": {
             "slide_index": 2
-          },
+          }
+        },
+        {
+          "id": "blk_01_06",
+          "type": "list",
           "ordered": false,
           "items": [
             "Locate Proton H2's Health and Safety Policy, and be able to reference its content",
@@ -100,16 +101,19 @@
             "Locate and be able to reference your safety management systems",
             "Access provincial OHS legislations",
             "Understand the basic requirements for health and safety on Proton H2 work sites"
-          ]
-        },
-        {
-          "id": "blk_01_05",
-          "type": "image",
+          ],
           "source_ref": {
             "slide_index": 2
-          },
+          }
+        },
+        {
+          "id": "blk_01_07",
+          "type": "image",
           "asset_id": "ast_2_3",
-          "alt": "Orientation objectives slide supporting image"
+          "alt": "Orientation learning objectives slide illustration",
+          "source_ref": {
+            "slide_index": 2
+          }
         }
       ]
     },
@@ -126,7 +130,7 @@
       "learning_objectives": [
         {
           "id": "obj_02_1",
-          "text": "Understand Proton H2's health and safety expectations, including the requirement to report all accidents, incidents, and near misses immediately.",
+          "text": "Describe the core expectations and accountabilities for all Proton H2 employees regarding health and safety performance.",
           "source_block_ids": [
             "blk_02_02",
             "blk_02_03",
@@ -135,11 +139,19 @@
         },
         {
           "id": "obj_02_2",
-          "text": "Identify and locate Proton H2's HSE Policy commitments and the Health and Safety Program Manual.",
+          "text": "Identify the HSE commitments outlined in the Proton H2 Health and Safety Policy and explain where the policy can be found.",
           "source_block_ids": [
             "blk_02_05",
             "blk_02_06",
             "blk_02_07"
+          ]
+        },
+        {
+          "id": "obj_02_3",
+          "text": "Locate the Proton H2 Health and Safety Program Manual and understand each employee's responsibility to be familiar with its contents.",
+          "source_block_ids": [
+            "blk_02_08",
+            "blk_02_09"
           ]
         }
       ],
@@ -147,72 +159,87 @@
         {
           "id": "blk_02_01",
           "type": "image",
+          "asset_id": "ast_3_4",
+          "alt": "The Health and Safety Program section title slide",
           "source_ref": {
             "slide_index": 3
-          },
-          "asset_id": "ast_3_4",
-          "alt": "The Health and Safety Program section title image"
+          }
         },
         {
           "id": "blk_02_02",
           "type": "key_point",
+          "text": "All employees of Proton H2 are expected to follow the health and safety guidelines as set out in the safety manual and safety program.",
           "source_ref": {
             "slide_index": 4
-          },
-          "text": "All employees of Proton H2 are expected to follow the health and safety guidelines as set out in the safety manual and safety program."
+          }
         },
         {
           "id": "blk_02_03",
           "type": "key_point",
+          "text": "Everyone is accountable for their health and safety performance.",
           "source_ref": {
             "slide_index": 4
-          },
-          "text": "Everyone is accountable for their health and safety performance."
+          }
         },
         {
           "id": "blk_02_04",
           "type": "callout",
-          "source_ref": {
-            "slide_index": 4
-          },
           "variant": "critical",
           "title": "Incident Reporting",
-          "text": "All accidents/incidents/near misses must be reported immediately and will be investigated."
+          "text": "All accidents/incidents/near misses must be reported immediately and will be investigated.",
+          "source_ref": {
+            "slide_index": 4
+          }
         },
         {
           "id": "blk_02_05",
-          "type": "list",
+          "type": "image",
+          "asset_id": "ast_4_5",
+          "alt": "Health and Safety slide illustration",
           "source_ref": {
-            "slide_index": 5
-          },
-          "ordered": false,
-          "items": [
-            "Maintain and continuously improve our comprehensive HSE Management System (HSE Management System)",
-            "Provide resources, training and technology to meet our HSE goals, objectives, targets and commitments",
-            "Strive to eliminate any foreseeable hazards",
-            "Safeguard the environment, including prevention and the mitigation of environmental impacts",
-            "Ensure all levels of management and supervisors comply with HSE responsibilities and requirements",
-            "Ensure all workers perform their jobs properly in accordance with established responsibilities, policies, standards, codes of practice, safe work practices, and safe operating procedures",
-            "Comply with all applicable HSE legislation",
-            "Establish maximum cooperation based on a strong sense of personal responsibility"
-          ]
+            "slide_index": 4
+          }
         },
         {
           "id": "blk_02_06",
-          "type": "callout",
+          "type": "heading",
+          "level": 2,
+          "text": "In support of this Policy, Proton H2 has identified the following HSE commitments:",
           "source_ref": {
             "slide_index": 5
-          },
-          "variant": "info",
-          "title": "HSE Policy Location",
-          "text": "Proton H2 Health, Safety and Environmental (HSE) Policy can be found at the beginning of the Health and Safety Program Manual."
+          }
         },
         {
           "id": "blk_02_07",
           "type": "list",
+          "ordered": false,
+          "items": [
+            "Maintain and continuously improve our comprehensive HSE Management System (HSE Management System)",
+            "Provide resources, training and technology to meet our HSE goals, objectives, targets and commitments.",
+            "Strive to eliminate any foreseeable hazards",
+            "Safeguard the environment, including prevention and the mitigation of environmental impacts",
+            "Ensure all levels of management and supervisors comply with HSE responsibilities and requirements.",
+            "Ensure all workers perform their jobs properly in accordance with established responsibilities, policies, standards, codes of practice, safe work practices, and safe operating procedures",
+            "Comply with all applicable HSE legislation",
+            "Establish maximum cooperation based on a strong sense of personal responsibility."
+          ],
           "source_ref": {
-            "slide_index": 6
-          },
+            "slide_index": 5
+          }
+        },
+        {
+          "id": "blk_02_08",
+          "type": "callout",
+          "variant": "info",
+          "title": "HSE Policy Location",
+          "text": "Proton H2 Health, Safety and Environmental (HSE) Policy can be found at the beginning of the Health and Safety Program Manual.",
+          "source_ref": {
+            "slide_index": 5
+          }
+        },
+        {
+          "id": "blk_02_09",
+          "type": "list",
           "ordered": false,
           "items": [
             "The Proton H2 Health and Safety Program Manual can be found online or as a binder in the office/onsite",
@@ -220,26 +247,29 @@
             "Read through all relevant sections and information",
             "Ask questions if you are not sure about content or other information in the safety program",
             "Providing appropriate support",
-            "Every employee has the responsibility to be familiar with this program and know where to access it"
-          ]
-        },
-        {
-          "id": "blk_02_08",
-          "type": "image",
+            "Every employee has the responsibility to be familiar with this program and know where to access it."
+          ],
           "source_ref": {
             "slide_index": 6
-          },
+          }
+        },
+        {
+          "id": "blk_02_10",
+          "type": "image",
           "asset_id": "ast_6_6",
-          "alt": "Health and Safety Policies slide supporting image 1"
-        },
-        {
-          "id": "blk_02_09",
-          "type": "image",
+          "alt": "Health and Safety Program Manual reference illustration",
           "source_ref": {
             "slide_index": 6
-          },
+          }
+        },
+        {
+          "id": "blk_02_11",
+          "type": "image",
           "asset_id": "ast_6_7",
-          "alt": "Health and Safety Policies slide supporting image 2"
+          "alt": "Health and Safety Program Manual reference illustration 2",
+          "source_ref": {
+            "slide_index": 6
+          }
         }
       ]
     },
@@ -253,7 +283,7 @@
       "learning_objectives": [
         {
           "id": "obj_03_1",
-          "text": "Identify and describe the hierarchy of hazard controls used in risk assessments, including elimination, substitution, engineering, administration, and PPE.",
+          "text": "Identify and describe the hierarchy of hazard controls used in risk assessments, from elimination through to PPE.",
           "source_block_ids": [
             "blk_03_01",
             "blk_03_02"
@@ -264,52 +294,78 @@
         {
           "id": "blk_03_01",
           "type": "heading",
+          "level": 2,
+          "text": "RISK ASSESSMENTS",
           "source_ref": {
             "slide_index": 7
-          },
-          "level": 2,
-          "text": "Risk Assessments"
+          }
         },
         {
           "id": "blk_03_02",
-          "type": "hazard",
+          "type": "table",
+          "headers": [
+            "Control Type",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Elimination",
+              "Eliminating the hazard completely"
+            ],
+            [
+              "Substitution",
+              "Substituting something to lessen or eliminate the identified hazard(s)"
+            ],
+            [
+              "Engineering",
+              "Engineering the hazard (enclosures, guards, barriers, different tools/equipment)"
+            ],
+            [
+              "Administration",
+              "Changes in procedures, policies or processes"
+            ],
+            [
+              "PPE",
+              "Personal protective equipment — providing protective equipment to create a barrier between the worker and the hazards (gloves, safety glasses, hard hats, steel toed boots etc.)"
+            ]
+          ],
+          "caption": "Hierarchy of hazard controls applied in risk assessments",
           "source_ref": {
             "slide_index": 7
-          },
+          }
+        },
+        {
+          "id": "blk_03_03",
+          "type": "hazard",
           "hazard": "Workplace Hazards (General)",
-          "description": "Hazards identified during risk assessments require controls to protect workers. Controls must be applied following the hierarchy of controls.",
+          "description": "Hazards exist in every workplace and pose potential risks to workers if not identified and controlled through risk assessment.",
           "severity": "high",
           "controls": [
             {
               "type": "engineering",
-              "text": "Eliminating the hazard completely"
-            },
-            {
-              "type": "engineering",
-              "text": "Substituting something to lessen or eliminate the identified hazard(s)"
-            },
-            {
-              "type": "engineering",
-              "text": "Engineering the hazard (enclosures, guards, barriers, different tools/equipment)"
+              "text": "Eliminate the hazard completely or engineer controls such as enclosures, guards, and barriers"
             },
             {
               "type": "administrative",
-              "text": "Administration (changes in procedures, policies or processes)"
+              "text": "Substitute hazardous materials or processes and implement changes in procedures, policies, or processes"
             },
             {
               "type": "ppe",
-              "text": "Personal protective equipment (PPE), providing protective equipment to create a barrier between the worker and the hazards (gloves, safety glasses, hard hats, steel toed boots etc.)"
+              "text": "Provide personal protective equipment such as gloves, safety glasses, hard hats, and steel toed boots to create a barrier between the worker and the hazard"
             }
-          ]
-        },
-        {
-          "id": "blk_03_03",
-          "type": "image",
+          ],
           "source_ref": {
             "slide_index": 7
-          },
+          }
+        },
+        {
+          "id": "blk_03_04",
+          "type": "image",
           "asset_id": "ast_7_8",
-          "alt": "Risk assessments and hierarchy of controls supporting image"
+          "alt": "Risk assessments and hazard controls illustration",
+          "source_ref": {
+            "slide_index": 7
+          }
         }
       ]
     },
@@ -323,7 +379,7 @@
       "learning_objectives": [
         {
           "id": "obj_04_1",
-          "text": "Understand employer and worker responsibilities under provincial OH&S legislation, including the duty to protect the health, safety and welfare of all workers.",
+          "text": "Explain the responsibilities of owners/employers and workers under provincial OH&S legislation as it applies to Proton H2 worksites.",
           "source_block_ids": [
             "blk_04_01",
             "blk_04_02"
@@ -334,36 +390,36 @@
         {
           "id": "blk_04_01",
           "type": "paragraph",
+          "text": "Every Provincial legislation states, in same or similar verbiage, the responsibility of the owner/employer to do everything practicable to ensure the health, safety and welfare of all workers working on applicable worksites. They must also ensure workers are aware of their rights and duties.",
           "source_ref": {
             "slide_index": 8
-          },
-          "text": "Every Provincial legislation states, in same or similar verbiage, the responsibility of the owner/employer to do everything practicable to ensure the health, safety and welfare of all workers working on applicable worksites. They must also ensure workers are aware of their rights and duties."
+          }
         },
         {
           "id": "blk_04_02",
           "type": "key_point",
+          "text": "Workers must ensure they understand the relevant OH&S legislation, and take reasonable care and attention to protect the health and safety of all workers and others in or in the vicinity of work being done by Proton H2 and its contractors.",
           "source_ref": {
             "slide_index": 8
-          },
-          "text": "Workers must ensure they understand the relevant OH&S legislation, and take reasonable care and attention to protect the health and safety of all workers and others in or in the vicinity of work being done by Proton H2 and its contractors."
+          }
         },
         {
           "id": "blk_04_03",
           "type": "image",
+          "asset_id": "ast_8_9",
+          "alt": "OH&S Legislation illustration 1",
           "source_ref": {
             "slide_index": 8
-          },
-          "asset_id": "ast_8_9",
-          "alt": "OH&S Legislation slide supporting image 1"
+          }
         },
         {
           "id": "blk_04_04",
           "type": "image",
+          "asset_id": "ast_8_10",
+          "alt": "OH&S Legislation illustration 2",
           "source_ref": {
             "slide_index": 8
-          },
-          "asset_id": "ast_8_10",
-          "alt": "OH&S Legislation slide supporting image 2"
+          }
         }
       ]
     },
@@ -377,7 +433,7 @@
       "learning_objectives": [
         {
           "id": "obj_05_1",
-          "text": "Identify and record Proton H2 head office contact information, including the 24-hour emergency number.",
+          "text": "Locate and record Proton H2 head office contact details, including the 24-hour emergency number.",
           "source_block_ids": [
             "blk_05_01",
             "blk_05_02"
@@ -387,17 +443,23 @@
       "blocks": [
         {
           "id": "blk_05_01",
-          "type": "table",
+          "type": "heading",
+          "level": 2,
+          "text": "Contact Information",
           "source_ref": {
             "slide_index": 9
-          },
+          }
+        },
+        {
+          "id": "blk_05_02",
+          "type": "table",
           "headers": [
-            "Contact Type",
-            "Details"
+            "Detail",
+            "Information"
           ],
           "rows": [
             [
-              "Head Office Address",
+              "Head Office",
               "0000, 000 – 0th Avenue S.W., Calgary, Alberta, T2P 000"
             ],
             [
@@ -409,42 +471,45 @@
               "1 (877) 000 0000"
             ]
           ],
-          "caption": "Proton H2 Contact Information"
-        },
-        {
-          "id": "blk_05_02",
-          "type": "callout",
+          "caption": "Proton H2 head office and emergency contact details",
           "source_ref": {
             "slide_index": 9
-          },
-          "variant": "critical",
-          "title": "24-Hour Emergency Line",
-          "text": "In the event of an emergency, contact the 24-hour emergency number: 1 (877) 000 0000."
+          }
         },
         {
           "id": "blk_05_03",
-          "type": "image",
+          "type": "callout",
+          "variant": "critical",
+          "title": "24-Hour Emergency Line",
+          "text": "In the event of an emergency, contact the 24 Hour Emergency Number: 1 (877) 000 0000.",
           "source_ref": {
             "slide_index": 9
-          },
-          "asset_id": "ast_9_11",
-          "alt": "Contact information slide supporting image 1"
+          }
         },
         {
           "id": "blk_05_04",
           "type": "image",
+          "asset_id": "ast_9_11",
+          "alt": "Contact information slide illustration 1",
           "source_ref": {
             "slide_index": 9
-          },
+          }
+        },
+        {
+          "id": "blk_05_05",
+          "type": "image",
           "asset_id": "ast_9_12",
-          "alt": "Contact information slide supporting image 2"
+          "alt": "Contact information slide illustration 2",
+          "source_ref": {
+            "slide_index": 9
+          }
         }
       ]
     }
   ],
   "hazard_index": [
     {
-      "block_id": "blk_03_02",
+      "block_id": "blk_03_03",
       "module_id": "mod_03",
       "hazard": "Workplace Hazards (General)",
       "severity": "high"

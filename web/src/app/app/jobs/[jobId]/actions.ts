@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { inngest } from '@/lib/inngest/client'
-import { generationJobApprove } from '@/lib/inngest/events'
+import { generationJobApprove, generationJobStart } from '@/lib/inngest/events'
 import { validateBlock } from '@/lib/renderer/validate'
 import type { ContentModel, JobRecord, Quiz, RequalificationPolicy } from '@/contracts/types'
 
@@ -243,6 +243,45 @@ export async function saveQuizEdits(
   if (updateErr) return { error: updateErr.message }
 
   return {}
+}
+
+// ── Retry a failed or cancelled job (contracts §1 failed → retry) ─────────────
+// Resets the job to queued and re-fires the start event, preserving existing
+// source_asset and any artifacts already written. Never re-uploads the deck.
+export async function retryJob(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) redirect('/login')
+
+  const jobId = formData.get('job_id') as string | null
+  if (!jobId) redirect('/app/sites?error=Job+ID+required')
+
+  // RLS scopes this select to the caller's org — no cross-tenant reads possible.
+  const { data: job } = await supabase
+    .from('generation_jobs')
+    .select('id, status, site_id, org_id')
+    .eq('id', jobId)
+    .maybeSingle()
+
+  if (!job) redirect('/app/sites?error=Job+not+found')
+
+  if (job.status !== 'failed' && job.status !== 'cancelled') {
+    redirect(`/app/jobs/${jobId}?notice=Job+is+not+in+a+retryable+state`)
+  }
+
+  await supabase
+    .from('generation_jobs')
+    .update({ status: 'queued', current_stage: 'queued', error: null, updated_at: new Date().toISOString() })
+    .eq('id', jobId)
+
+  await inngest.send(
+    generationJobStart.create({ jobId: job.id, siteId: job.site_id, orgId: job.org_id }),
+  )
+
+  redirect(`/app/jobs/${jobId}`)
 }
 
 const VALID_POLICIES: RequalificationPolicy[] = ['full', 'new_content_only', 'none']
