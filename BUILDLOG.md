@@ -931,6 +931,35 @@ The approve→publish path reads `artifacts.content_model.sha256` and `artifacts
 
 ---
 
+### 2026-06-28 — M2 Step 4 — Bounded approval editor, VERIFIED LIVE
+
+**What Was Verified**:
+
+Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck through the browser UI (not the eval harness):
+
+1. **Extract → Structure → Quiz → QA loop**: pipeline ran all four stages. The QA evaluator flagged 2 blockers and 1 major issue against the hierarchy-of-controls content (slide 7 collapsed into a single vague block; q_07 and q_08 cited it but the answers were unsupported). The rework loop ran to `max_rework=3`, exhausted, and escalated to `awaiting_approval` with `qa_flagged=true` — correct behaviour per contracts §1.
+2. **Approval screen**: QA flag banner appeared. Issue banners displayed next to the referenced content model block (`blk_03_02`) and quiz questions (q_07, q_08).
+3. **Bounded editor**: opened the quiz editor, edited a flagged question (rewrote stem/rationale to be answerable from the cited source block), saved. The `saveQuizEdits` server action validated the edit, uploaded a new human-envelope artifact, and updated `artifacts.quiz.sha256` in the DB.
+4. **Approve & publish**: selected a requalification policy and approved as Content Approver. Inngest ran the `publishing` stage. `orientation_packages` received a new row with a distinct `content_hash = sha256(cm_sha256:new_quiz_sha256)` — confirmed in Supabase Table Editor.
+5. **Job tracker**: `status = published` confirmed in the DB.
+
+**Commits in this step**: `3607b74` (Step 4a CM editor), `dafa7dd` (Step 4b quiz editor + QA surface + publish-from-edited).
+
+**Live-test defect punch list** (found during verification — to address before M2 ships / pilot):
+
+| # | Defect | Status |
+|---|--------|--------|
+| 1 | Extractor requires `EXTRACTOR_SHARED_SECRET` in its own `.env` — `app.py` used bare `os.environ.get()` with no `.env` loader, causing 500 on every `/extract` call | Fixed `532677c` — `python-dotenv` + `load_dotenv()` added; requirement documented |
+| 2 | Re-running a generation after a failed job throws raw `generation_jobs_idempotency_key_unique` error instead of resuming/replacing gracefully (contracts §1 failed→retry) | Fixed `4384f9d` — pre-check before upload; failed/cancelled → reset to queued + re-send event; other states → friendly redirect |
+| 3 | Job tracker doesn't update live — `generation_jobs` not in `supabase_realtime` publication on the recreated Canada project | Fixed `532677c` — migration `0016_realtime_generation_jobs.sql` adds table to publication (idempotent); apply with `npm run db:migrate` |
+| 4 | Tracker shows terminal `published` step as "In progress…" instead of ✓ done | Fixed `532677c` — `isComplete` flag collapses all steps to done when `status = published` |
+| 5 | No in-app role management — granting `content_approver` requires a service-role script or manual Supabase dashboard edit | **Open** — deferred; add role-assignment UI as part of M1 org/member management |
+
+**What's Next**:
+- Apply migration 0016 to live project: `npm run db:migrate`
+- M2 is feature-complete. Pre-ship checklist before pilot: re-enable Supabase email confirmation; orphaned invite-stub cleanup; extractor Vercel timeout decision (73 s real; Hobby cap 10 s); Inngest Cloud keys in Vercel prod; end-to-end prod smoke test.
+- M3 — Contractor Experience & QR Issuance (page-by-page player, quiz, completion, QR issued).
+
 ---
 
 ### 2026-06-28 — Defects: published-state tracker display + realtime publication missing
