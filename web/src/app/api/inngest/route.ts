@@ -4,6 +4,8 @@ import { helloWorld } from '@/lib/inngest/functions/hello'
 import { runGenerationJob } from '@/lib/inngest/functions/run-generation-job'
 import { publishOrientationPackage } from '@/lib/inngest/functions/publish-orientation-package'
 
+export const maxDuration = 300
+
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [helloWorld, runGenerationJob, publishOrientationPackage],

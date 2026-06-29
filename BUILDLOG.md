@@ -1065,6 +1065,25 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-06-28 — Step 5a: maxDuration 300 on extractor + Inngest route (Vercel Pro)
+
+**What I Built**:
+- `python-extractor/vercel.json`: added `"functions": { "app.py": { "maxDuration": 300 } }` alongside the existing `builds`/`routes` blocks. Raises the extractor's serverless function timeout from Hobby 10s to Pro 300s — real 45-asset deck took ~73s; 300s gives headroom.
+- `web/src/app/api/inngest/route.ts`: added `export const maxDuration = 300` (Next.js App Router route-segment config). Raises the Inngest callback route's timeout from 10s to 300s — structure stage alone takes ~49s; quiz + QA + rework loop can exceed 60s combined.
+
+**Why**: Vercel Pro is now active. Both limits were blocking any real-deck extraction or AI pipeline step from completing in production.
+
+**What's Next**:
+- Push this commit → Vercel auto-deploys both projects.
+- Verify the extractor: `curl https://<extractor-url>/health` → `{"status":"ok"}`; then trigger a real `/extract` on a deck in Supabase Storage and confirm it completes without a 504.
+- Step 5b — Inngest Cloud wiring: register app, get signing/event keys, set in Vercel Production for the web project, register `/api/inngest` endpoint, remove `INNGEST_DEV=1` from prod env.
+
+**Rules Followed**:
+- ✓ Two-line targeted change — no restructuring, no new dependencies
+- ✓ Lint clean; no existing tests affected
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).
