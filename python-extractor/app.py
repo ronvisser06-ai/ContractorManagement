@@ -6,6 +6,10 @@ Feature2-Pipeline-Skeleton-Brief.md Step 3 for why. Run locally with:
 
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import httpx
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel

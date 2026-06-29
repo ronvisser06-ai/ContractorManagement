@@ -63,14 +63,56 @@ export async function createJob(formData: FormData) {
 
   if (!site) redirect('/app/sites?error=Site+not+found')
 
-  const jobId = newId('job_')
+  // Compute SHA256 before any I/O — needed to form the idempotency key for the
+  // duplicate/retry check below.
   const bytes = Buffer.from(await deck.arrayBuffer())
   const sha256 = createHash('sha256').update(bytes).digest('hex')
+  const idemKey = `${siteId}:sha256:${sha256}`
+
+  // Check for an existing job for this exact deck+site before uploading anything.
+  // Handles two cases without ever hitting the unique constraint:
+  //   failed | cancelled → retry path (contracts §1): reset to queued, re-send event
+  //   any other state    → route the user to the existing job with a clear notice
+  const { data: existing } = await supabase
+    .from('generation_jobs')
+    .select('id, status')
+    .eq('idempotency_key', idemKey)
+    .maybeSingle()
+
+  if (existing) {
+    if (existing.status === 'failed' || existing.status === 'cancelled') {
+      // Retry: reset to queued, preserve existing source_asset and artifacts,
+      // re-fire the start event so Inngest re-enters from extracting.
+      await supabase
+        .from('generation_jobs')
+        .update({ status: 'queued', current_stage: 'queued', error: null, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+      await inngest.send(
+        generationJobStart.create({ jobId: existing.id, siteId, orgId: membership.org_id }),
+      )
+      redirect(`/app/jobs/${existing.id}`)
+    }
+
+    const notice: Record<string, string> = {
+      queued: 'Job+for+this+deck+is+already+queued',
+      extracting: 'Job+for+this+deck+is+already+running',
+      structuring: 'Job+for+this+deck+is+already+running',
+      generating_quiz: 'Job+for+this+deck+is+already+running',
+      qa_evaluating: 'Job+for+this+deck+is+already+running',
+      awaiting_approval: 'A+draft+for+this+deck+is+awaiting+approval',
+      publishing: 'This+deck+is+being+published',
+      published: 'This+deck+is+already+published',
+    }
+    redirect(
+      `/app/jobs/${existing.id}?notice=${notice[existing.status] ?? 'Job+for+this+deck+already+exists'}`,
+    )
+  }
+
+  // New job — upload the deck then insert.
+  const jobId = newId('job_')
   const safeName = deck.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')
   const storageKey = `sites/${siteId}/jobs/${jobId}/source/${safeName}`
 
-  // Upload via the admin client: the bucket is private with no object policies
-  // (Step 2 setup migration) — only the service role writes to it.
   const admin = createAdminClient()
   const { error: uploadErr } = await admin.storage
     .from(ARTIFACTS_BUCKET)
@@ -88,17 +130,13 @@ export async function createJob(formData: FormData) {
     uploaded_at: new Date().toISOString(),
   }
 
-  // RLS ("generation_jobs: write if client_admin or content_developer") enforces
-  // that only those roles in this org_id may actually insert.
   const { error } = await supabase.from('generation_jobs').insert({
     id: jobId,
     org_id: membership.org_id,
     site_id: siteId,
     created_by: user.id,
     source_asset: sourceAsset,
-    // Per contracts §2's own example shape: dedupes a resubmission of the exact
-    // same deck for the same site rather than spawning a duplicate job.
-    idempotency_key: `${siteId}:sha256:${sha256}`,
+    idempotency_key: idemKey,
   })
 
   if (error) {
