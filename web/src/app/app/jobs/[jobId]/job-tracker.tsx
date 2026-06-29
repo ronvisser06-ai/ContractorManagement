@@ -67,6 +67,8 @@ export function JobTracker({ jobId, initialJob }: Props) {
   }, [jobId])
 
   const currentIndex = STAGE_ORDER.indexOf(job.status)
+  // published is terminal-success: every step in the list is done, none active.
+  const isComplete = job.status === 'published'
   const artifactEntries = Object.entries(job.artifacts ?? {})
 
   return (
@@ -74,7 +76,13 @@ export function JobTracker({ jobId, initialJob }: Props) {
       <ol className="space-y-2">
         {STAGE_ORDER.map((stage, index) => {
           const state =
-            currentIndex < 0 ? 'pending' : index < currentIndex ? 'done' : index === currentIndex ? 'active' : 'pending'
+            currentIndex < 0
+              ? 'pending'
+              : isComplete || index < currentIndex
+                ? 'done'
+                : index === currentIndex
+                  ? 'active'
+                  : 'pending'
 
           return (
             <li

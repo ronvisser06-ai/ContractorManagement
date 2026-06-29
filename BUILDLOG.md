@@ -931,6 +931,60 @@ The approve→publish path reads `artifacts.content_model.sha256` and `artifacts
 
 ---
 
+---
+
+### 2026-06-28 — Defects: published-state tracker display + realtime publication missing
+
+**What I Built**:
+- Fixed `web/src/app/app/jobs/[jobId]/job-tracker.tsx`: `published` is the last entry in `STAGE_ORDER`, so `index === currentIndex` marked it `active` → "In progress…" even after the job completed. Added `isComplete = job.status === 'published'` flag; when true, `isComplete || index < currentIndex` collapses all steps to `done` with ✓ and no "In progress…" label.
+- Added `web/drizzle/migrations/0016_realtime_generation_jobs.sql`: idempotent `ALTER PUBLICATION supabase_realtime ADD TABLE generation_jobs` wrapped in a `DO` block that skips if already present. Without this, the `generation_jobs` table is absent from the Supabase realtime publication on the recreated Canada project, so `postgres_changes` events never fire and the JobTracker never updates live.
+
+**Root Causes**:
+- Tracker: `published` is a terminal node in the ordered stage list but the renderer treats `index === currentIndex` universally as "active". It needs a terminal-success carve-out.
+- Realtime: `supabase_realtime` publication tables are project-level config, not inherited when a project is recreated. The initial schema migration didn't include an `ALTER PUBLICATION` step.
+
+**To apply the realtime migration**: run `npm run db:migrate` from `web/` — drizzle-kit will apply `0016_realtime_generation_jobs`.
+
+**What Went Wrong**: Nothing — tsc/lint/build clean on first pass.
+
+**Rules Followed**:
+- ✓ Minimal change — one boolean flag, no restructuring of the tracker
+- ✓ Migration is idempotent — safe to run on projects where the table is already published
+
+---
+
+### 2026-06-28 — Defect: createJob throws raw constraint error on re-run after failed job
+
+**What I Built**:
+- Fixed `web/src/app/app/jobs/actions.ts` `createJob` to handle the `generation_jobs_idempotency_key_unique` constraint without ever surfacing it as a raw error.
+- Added `web/src/test/create-job-idempotency.test.mts` with 3 test cases.
+
+**Root Cause**: `createJob` uploaded the deck and attempted a blind INSERT before checking whether a job with the same idempotency key (`{siteId}:sha256:{sha256}`) already existed. When re-uploading the same deck after a failure, the unique constraint fired and the raw Postgres error was passed straight to `redirect()`.
+
+**Fix** (contracts §1 failed → retry path):
+1. Move SHA256 computation before storage upload — needed to form the idempotency key early.
+2. Query for an existing job with that key **before** uploading anything.
+3. `failed | cancelled` → reset to `queued` (status, current_stage, error), preserve existing `source_asset` and artifacts, re-send `generationJobStart` Inngest event, redirect to existing job. No new upload.
+4. Any other active state → redirect to the existing job with a human-readable `?notice=` param.
+5. No existing job → original upload + insert + event flow unchanged.
+
+**Test** (`src/test/create-job-idempotency.test.mts` — 3/3 pass):
+- `failed job: pre-check finds it and retry update resets status to queued` — seeds a failed job, runs the pre-check query and retry update, asserts status becomes `queued` and error is null.
+- `awaiting_approval job: pre-check finds it so createJob redirects rather than inserting` — confirms the non-retryable redirect path AND that a blind duplicate insert is still rejected by the constraint.
+- `no existing job: insert succeeds (normal new-job path)` — confirms the unaffected happy path.
+
+**What Went Wrong**: None — tsc/lint clean on first pass after fixing `SupabaseClient` type annotation on test's `userClient` variable (must use `SupabaseClient` not `ReturnType<typeof createClient>` to avoid `never` inference).
+
+**What's Next**: Schedule this commit; continue M2 Step 4 approval walk-through.
+
+**Rules Followed**:
+- ✓ Read contracts §1 state machine before fixing
+- ✓ No raw DB errors surface to the user
+- ✓ Retry preserves artifacts (no re-upload, no new job row)
+- ✓ Test added covering all three branches (retry, redirect, new)
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).
