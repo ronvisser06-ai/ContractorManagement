@@ -120,6 +120,13 @@
       "when": 1783105200000,
       "tag": "0016_realtime_generation_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783191600000,
+      "tag": "0017_org_role_management",
+      "breakpoints": true
     }
   ]
 }

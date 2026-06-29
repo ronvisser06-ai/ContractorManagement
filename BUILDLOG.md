@@ -1032,6 +1032,39 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-06-28 — Step 4.5c: Minimal In-App Role Management (Team page)
+
+**What I Built**:
+- Migration `0017_org_role_management.sql`:
+  - `user_is_org_admin(uid, org_id)` SECURITY DEFINER helper — checks if a user is an active client_admin in a given org without recursing on the `org_memberships` table (same pattern as `user_org_ids`).
+  - `"memberships: update roles if client_admin"` UPDATE policy on `org_memberships` with both USING and WITH CHECK — allows a client_admin to update any active member's roles in their org. USING evaluates pre-update so the caller still appears as admin during the check.
+  - `"users: read if same org member"` SELECT policy on `users` — enables the team page to display names/emails for all org members (analogous to the contractor-side `"users: company member reads"` policy).
+- `web/src/app/app/team/actions.ts` (`toggleRole` server action):
+  - Validates caller is an active client_admin; validates target membership belongs to the same org.
+  - No-op guard: skips the write when the state already matches.
+  - **Last-admin guard**: before any `client_admin` revoke, fetches all active memberships and counts admins in JS. If count ≤ 1 → redirects with a clear error. This is the only safety net — the DB UPDATE policy would permit the write (USING evaluates pre-update).
+  - Computes new roles array as `Set` union (grant) or filter (revoke), then writes via the user's RLS-scoped client.
+- `web/src/app/app/team/page.tsx`: lists all active org members (separate queries for `org_memberships` + `users` to avoid join type cast complexity). Per member: name, email, 4 role toggle buttons (✓ filled = has role; + outlined = can grant). Client_admin toggle for the sole admin is `disabled` with a tooltip — UI guard matches the server-side guard.
+- `web/src/app/app/layout.tsx`: added "Team" nav item for `client_admin`.
+- Note: inviting new org colleagues is not yet available in-app — deferred; noted in the page footer.
+
+**What Went Wrong**: Nothing — tsc/lint/build/migration all clean on first pass.
+
+**Test** (`src/test/org-role-management.test.mts` — 4/4 pass):
+1. `client_admin grants content_approver to another member` — UPDATE via adminClient, assert member gains the role.
+2. `client_admin grants content_approver to themselves` — self-UPDATE, assert additive roles.
+3. `non-admin cannot update membership roles (RLS blocks)` — memberClient UPDATE on adminMembership, assert admin row unchanged.
+4. **`last-admin guard: sole admin detected; DB permits the write but guard blocks the action`** — the security-critical test: guard query returns adminCount=1; UPDATE via adminClient to remove own client_admin succeeds at DB level (confirms the guard must live in the application, not the DB); immediately restores via service-role admin client and confirms restoration.
+
+**Rules Followed**:
+- ✓ Read HowDesign-DataModel.md §3.2 + FunctionalOverview.md §2 before building
+- ✓ SECURITY DEFINER helper prevents RLS recursion on the UPDATE policy
+- ✓ Last-admin guard explicitly tested: the test proves the DB would allow the removal and that the application guard is the only protection
+- ✓ Migration applied via `npm run db:migrate` before tests ran
+- ✓ TypeScript strict, lint, and build all clean; 4/4 tests green
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

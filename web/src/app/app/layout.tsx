@@ -23,6 +23,7 @@ interface ComingSoonItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Sites', href: '/app/sites', roles: ['client_admin'] },
   { label: 'Contractors', href: '/app/contractors', roles: ['client_admin'] },
+  { label: 'Team', href: '/app/team', roles: ['client_admin'] },
 ]
 
 const COMING_SOON: ComingSoonItem[] = [
