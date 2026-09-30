@@ -1227,6 +1227,27 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-09-30 — F0 ship check + post-ship tidy-up
+
+**Ship check (Jacques)**: ✅ core feature works (Steps 2–5); ✅ tested (98/98 + browser click-through); ✅ committed/pushed; ✅ **already live** — Vercel Production env now points at ConTrak (`/api/health` ok), latest commit deployed, landing router serving in prod. ⚠️ Rule 12 nit: 3 unused exports. ⚠️ HTTP switcher/forged-cookie checks lived in scratchpad scripts, not the permanent suite.
+
+**Tidy-up done**:
+- Removed unused `getActiveOrg`, `getActiveCompany`, `MembershipContext` from `lib/context/server.ts` (the `requireActive*` helpers replaced them).
+- Removed the F0 demo persona and its data (`seed-f0-persona.mjs --cleanup`): 1 org, 2 companies, 1 site, 3 users.
+- Deleted **210 orphaned `public.users` rows** (test profiles whose auth users the older test suites delete without removing the profile). Checked first: no login, all `@example.com`, zero references across the 11 FK columns to `users`; deleted in one transaction with those guards and an exact-count check. ConTrak now has **0 users**.
+- `CLAUDE.md`: M2.5 milestone line in §4 and a current footer (Rule 17).
+
+**Checks**: tsc, lint, build clean; `membership-context.test.mts` 15/15 and it leaves 0 users behind. Full suite deliberately **not** run: the older suites would re-create orphaned profiles in what is now the production DB.
+
+**Still open before real users**:
+- ConTrak **Confirm email** still ON; add the prod URL to Auth → URL Configuration.
+- **Tests run against production** (`web/.env.local` → ConTrak). Next step: a separate dev/test Supabase project.
+- Pre-existing bugs from Step 5 (expected-on-site embed, font variable, tab title, raw RLS message in `createSite`).
+
+**What's Next**: separate dev/test Supabase project → expected-on-site fix + page-query test → F1 (fresh conversation, Rule 18).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

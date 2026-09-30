@@ -59,6 +59,7 @@ Build in this order (ExecutionPlan §3). A milestone is **not** a feature — in
 - **M0 — Foundations & Walking Skeleton** (start here): scaffold, Supabase + Drizzle + Inngest, core schema + RLS, auth + RBAC (6 roles), org/site CRUD, the job state machine end-to-end with AI stages **stubbed**, fixed renderer, realtime stage tracker, approval gate. Deploy to staging.
 - **M1 — Tenancy, Sites & Contractor CRM**: company invite (email/SMS) → registration with soft-match, profiles, workers, lifecycle, crew **activation**, cross-tenant identity.
 - **M2 — Generation Pipeline + bounded Approval Editor**: real extract/structure/quiz/QA loop; side-by-side approval + bounded block editor (contracts §7); publish immutable versioned package.
+- **M2.5 — Contractor Network v2** (added 2026-09-30): F0 multi-membership context ✅ → F1 org-defined companies + nominated admins → F2 capability catalog → F3 company locations → F4 location↔facility mapping → F5 worker work profile → F6 credential wallet + experience → F7 orientation records on profile → F8 visibility hardening. Plan: `ContractorNetwork-GapAnalysis.md`.
 - **M3 — Contractor Experience & QR Issuance**: page-by-page player (video-skip warns+restarts), inline+end quiz, scoring/retries/lockout, completion pinned to content_hash, single per-worker QR issued + delivered, assisted/kiosk completion.
 - **M4 — QR Verification & Foreman PWA**: foreman active-site context, worker-centric scan, status (active/expired/revoked/incomplete/not_found), scan log, lockout reset.
 - **M5 — Dashboards, Reporting, Hardening & Pilot**: dashboards, requalification + expiry + lockout notifications, exports, OWASP/RLS audit, backups, pilot.
@@ -116,4 +117,4 @@ Jacques also passively flags violations of Rules 1, 2, 6, 20 — when flagged, c
 
 ---
 
-**Last Updated:** 2026-06-23 · Design phase complete; **M0 is the next build.**
+**Last Updated:** 2026-09-30 · M0–M1 done; M2 Steps 1–4 done (Step 5 production wiring in progress); **M2.5 F0 shipped — F1 is next.** Production DB is Supabase project **ConTrak** (`mjmgicubneitwqyaatxp`). See BUILDLOG.md for the latest state.

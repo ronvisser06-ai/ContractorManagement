@@ -7,13 +7,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getMyMemberships } from './query'
-import {
-  CONTEXT_COOKIE,
-  resolveActive,
-  type CompanyContext,
-  type OrgContext,
-  type OrgRole,
-} from './resolve'
+import { CONTEXT_COOKIE, resolveActive, type OrgRole } from './resolve'
 
 // Wrapped in React cache: a layout and its page share one lookup per request.
 export const getMembershipContext = cache(async () => {
@@ -58,24 +52,4 @@ export async function requireActiveOrg() {
   if (!ctx.activeOrg) redirect('/')
   const org = ctx.activeOrg
   return { ...ctx, org, hasRole: (role: OrgRole) => org.roles.includes(role) }
-}
-
-export type MembershipContext = NonNullable<Awaited<ReturnType<typeof getMembershipContext>>>
-
-export async function getActiveOrg(): Promise<{
-  active: OrgContext | null
-  all: OrgContext[]
-} | null> {
-  const ctx = await getMembershipContext()
-  if (!ctx) return null
-  return { active: ctx.activeOrg, all: ctx.orgs }
-}
-
-export async function getActiveCompany(): Promise<{
-  active: CompanyContext | null
-  all: CompanyContext[]
-} | null> {
-  const ctx = await getMembershipContext()
-  if (!ctx) return null
-  return { active: ctx.activeCompany, all: ctx.companies }
 }
