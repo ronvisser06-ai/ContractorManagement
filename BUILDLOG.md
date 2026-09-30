@@ -1200,6 +1200,33 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-09-30 — F0 Step 5 — Multi-membership end-to-end verification (F0 complete)
+
+**What I Built**:
+- `web/scripts/seed-f0-persona.mjs` — idempotent seed (and `--cleanup`) for the F0 persona **Dana Demo** (`f0-demo-persona@example.com`): Contractor Admin @ "F0 Demo — Apex Scaffolding", Worker @ "F0 Demo — Birch Electrical", Client Admin @ "F0 Demo — Northwind Energy"; plus site "North Plant", Apex linked + assigned, two Apex workers (Sam active on site). Password generated per run and written only to `web/.env.f0-persona.local` (git-ignored, verified with `git check-ignore`); never printed.
+- `.claude/launch.json` (local, not committed) — `web` config for the desktop preview runner (`npm --prefix web run start`, `autoPort`). The runner stops the server cleanly — no orphaned process, unlike `next start` via a background task.
+
+**Browser click-through** (in-app browser, production build; Ron signed in, Claude drove the rest):
+- Chooser: 1 org + 2 companies with the right role under each.
+- Apex (Contractor Admin): badge, switcher, All portals, admin nav; Profile / Workers (Sam, Riley) / Crew (North Plant, Sam active) correct.
+- Header switcher → Birch (Worker): badge "Worker", nav = My Profile only, read-only profile, `/company/crew` → profile. `/company/workers` by URL renders read-only roster (pre-existing behaviour, no admin controls).
+- All portals → Northwind (Client Admin): badge, nav, no org switcher (1 org), Sites / Contractors / Team show Northwind's data.
+- Account page: Admin portal + Contractor portal links. Mobile (375px): contractor header wraps cleanly, chooser fits.
+
+**Definition of Done (F0)**: ✅ persona uses every page in every context and switches from the header; ✅ no redirect loops / no create-org screen; ✅ single-membership users unchanged except the landing route (Steps 2–4 HTTP checks); ✅ forged `ctx_*` cookie can't select a foreign context (tested); ✅ full DB suite 98/98; ✅ tsc strict, lint, build clean.
+
+**Found during verification (pre-existing, NOT caused by F0 — logged, not fixed here)**:
+1. **Expected-on-site list is always empty on the Sites page** (since M1 Step 5b, `fce6a9d`). The query embeds `users(...)` from `site_worker_activations`, which has two FKs to `users` (`user_id`, `activated_by`) → PostgREST `PGRST201` ambiguous embed; the page's `.then(r => r.data ?? [])` swallows the error. Fix: `users!site_worker_activations_user_id_users_id_fk(given_name, family_name)` (verified returns Sam). The `expected-on-site` test didn't catch it because it queries differently from the page — add a test that runs the page's exact query.
+2. **App font never applies**: `globals.css` has `--font-sans: var(--font-sans)` (self-reference), so the Geist font from the root layout is unused and pages render in the browser's serif default.
+3. **Tab title is "Create Next App"** (root layout metadata).
+4. `createSite` shows the raw RLS message to non-admins (from Step 4).
+
+**Persona left in place** for Ron to explore — remove before ConTrak becomes production: `node --env-file=.env.local scripts/seed-f0-persona.mjs --cleanup` (from `web/`).
+
+**What's Next**: `Jacques, ship check` for F0 → small fix step for the expected-on-site embed (+ its test) → F1 (org defines company + assigns admin).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).
