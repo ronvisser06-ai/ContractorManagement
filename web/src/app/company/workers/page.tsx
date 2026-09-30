@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
+import { requireActiveCompany } from '@/lib/context/server'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -53,22 +52,8 @@ function OnboardingBadge({ status }: { status: string }) {
 }
 
 export default async function WorkersPage({ searchParams }: Props) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: myMembership } = await supabase
-    .from('company_memberships')
-    .select('company_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-  if (!myMembership) redirect('/login')
-
-  const isAdmin = (myMembership.roles as string[]).includes('contractor_admin')
-  const companyId = myMembership.company_id as string
+  const { supabase, company, isContractorAdmin: isAdmin } = await requireActiveCompany()
+  const companyId = company.id
 
   // Worker memberships for this company, with user profile joined.
   // The "users: company member reads" policy (migration 0009) enables the join.

@@ -1149,6 +1149,30 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-09-30 — F0 Step 3 — Contractor portal on the active company + switcher
+
+**What I Built**:
+- `requireActiveCompany()` in `lib/context/server.ts` — signed-in user's active company + `isContractorAdmin` for *that* company; signed out → `/login`, no company → `/`. `getMembershipContext` wrapped in React `cache` so a layout and its page share one lookup per request.
+- Converted all 7 contractor-portal call sites: `company/layout.tsx`, `company/profile/page.tsx` + `actions.ts`, `company/workers/page.tsx` + `actions.ts`, `company/crew/page.tsx` + `actions.ts`. Remaining `company_memberships` queries are scoped to a specific company (roster, dup check, insert, update) — correct as-is.
+- **Company switcher** in the contractor header (only when the user has 2+ companies): a select of companies with the role in each + "Switch" (posts `switchContext`, works without JS). "All portals" link to `/` when the user also has an org. Header badge and admin nav follow the role in the **active** company.
+
+**Verified (HTTP, local production server, 15/15 checks)** — persona: Worker in Company One, Contractor Admin in Company Two:
+- No selection → Company One as Worker; no admin nav; `/company/crew` → profile.
+- Real switcher form → 303 to `/company`, `ctx_company` = Company Two (httpOnly) → Contractor Admin view; Crew and Workers open.
+- Forged `ctx_company` (someone else's company) → ignored, falls back to Company One. Switching to a non-member company via the form → refused, no cookie.
+- Company-profile update posted while active company is the worker one → refused ("Only a Contractor Admin…"); no company renamed.
+- Regression: single-company admin unchanged, no switcher. Personas cleaned up (0 left).
+
+**What Went Wrong**:
+- `workers/page.tsx` import not swapped on first pass — caught by `tsc`.
+- **Windows: stopping the background `next start` task leaves the node process listening on 3100** (twice now). Fix: after stopping, check `Get-NetTCPConnection -LocalPort 3100` and stop the `next start` PID explicitly.
+
+**Tests**: full DB suite **98/98** sequential. tsc strict, lint, build clean.
+
+**What's Next**: F0 **Step 4** — client portal on the active org + org switcher (10 call sites) + account layout back-links.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

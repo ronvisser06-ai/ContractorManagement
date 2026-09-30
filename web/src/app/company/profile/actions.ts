@@ -1,26 +1,13 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { requireActiveCompany } from '@/lib/context/server'
 
 export async function updateCompanyProfile(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  // Acts on the user's *active* company, with their role in that company (F0).
+  const { supabase, company, isContractorAdmin } = await requireActiveCompany()
 
-  const { data: membership } = await supabase
-    .from('company_memberships')
-    .select('company_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-
-  if (!membership) redirect('/login')
-
-  const roles = membership.roles as string[]
-  if (!roles.includes('contractor_admin')) {
+  if (!isContractorAdmin) {
     redirect('/company/profile?error=Only+a+Contractor+Admin+can+edit+the+company+profile')
   }
 
@@ -50,7 +37,7 @@ export async function updateCompanyProfile(formData: FormData) {
       trade_types: tradeTypes,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', membership.company_id)
+    .eq('id', company.id)
 
   if (error) {
     redirect(`/company/profile?error=${encodeURIComponent(error.message)}`)

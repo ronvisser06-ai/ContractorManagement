@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { requireActiveCompany } from '@/lib/context/server'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,26 +18,12 @@ interface CompanyRow {
 }
 
 export default async function CompanyProfilePage({ searchParams }: Props) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: membership } = await supabase
-    .from('company_memberships')
-    .select('company_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-  if (!membership) redirect('/login')
-
-  const isAdmin = (membership.roles as string[]).includes('contractor_admin')
+  const { supabase, company: active, isContractorAdmin: isAdmin } = await requireActiveCompany()
 
   const { data: rawCompany } = await supabase
     .from('contractor_companies')
     .select('legal_name, trade_types, contact_name, contact_email, contact_phone, status')
-    .eq('id', membership.company_id)
+    .eq('id', active.id)
     .maybeSingle()
 
   const company = rawCompany as CompanyRow | null

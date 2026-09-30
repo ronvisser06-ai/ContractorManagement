@@ -1,36 +1,13 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { logout } from '@/app/(auth)/login/actions'
+import { switchContext } from '@/lib/context/actions'
+import { ROLE_LABEL } from '@/lib/context/resolve'
+import { requireActiveCompany } from '@/lib/context/server'
 
 export default async function CompanyLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
-  // Contractor portal: requires an active company membership.
-  const { data: membership } = await supabase
-    .from('company_memberships')
-    .select('company_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-
-  // No single active company: the landing router decides. Step 3 switches
-  // this lookup to the active company.
-  if (!membership) redirect('/')
-
-  const { data: company } = await supabase
-    .from('contractor_companies')
-    .select('legal_name')
-    .eq('id', membership.company_id)
-    .maybeSingle()
-
-  const isAdmin = (membership.roles as string[]).includes('contractor_admin')
+  // Contractor portal: the user's active company (F0). No company → landing router.
+  const { company, companies, orgs, isContractorAdmin } = await requireActiveCompany()
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -41,18 +18,48 @@ export default async function CompanyLayout({ children }: { children: React.Reac
               Contractor Portal
             </Link>
             <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-              {company?.legal_name ?? '—'} · {isAdmin ? 'Contractor Admin' : 'Worker'}
+              {company.name} · {isContractorAdmin ? 'Contractor Admin' : 'Worker'}
             </span>
           </div>
-          <form action={logout}>
-            <Button type="submit" variant="outline" size="sm">
-              Log out
-            </Button>
-          </form>
+          <div className="flex flex-wrap items-center gap-2">
+            {companies.length > 1 && (
+              <form action={switchContext} className="flex items-center gap-2">
+                <input type="hidden" name="kind" value="company" />
+                <label htmlFor="company-switch" className="sr-only">
+                  Switch company
+                </label>
+                <select
+                  id="company-switch"
+                  name="id"
+                  defaultValue={company.id}
+                  className="h-8 max-w-48 rounded-md border bg-background px-2 text-sm"
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.roles.map((r) => ROLE_LABEL[r]).join(', ')})
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit" variant="outline" size="sm">
+                  Switch
+                </Button>
+              </form>
+            )}
+            {orgs.length > 0 && (
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/">All portals</Link>
+              </Button>
+            )}
+            <form action={logout}>
+              <Button type="submit" variant="outline" size="sm">
+                Log out
+              </Button>
+            </form>
+          </div>
         </div>
 
         <nav className="mx-auto mt-3 flex max-w-3xl flex-wrap items-center gap-1">
-          {isAdmin && (
+          {isContractorAdmin && (
             <>
               <Button asChild variant="ghost" size="sm">
                 <Link href="/company/profile">Company Profile</Link>

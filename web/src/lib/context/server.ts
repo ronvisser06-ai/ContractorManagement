@@ -2,7 +2,9 @@
 // Reads the ctx_* cookies but never writes them: cookies can't be set during
 // Server Component render, so switching goes through switchContext (actions.ts).
 
+import { cache } from 'react'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getMyMemberships } from './query'
 import {
@@ -12,7 +14,8 @@ import {
   type OrgContext,
 } from './resolve'
 
-export async function getMembershipContext() {
+// Wrapped in React cache: a layout and its page share one lookup per request.
+export const getMembershipContext = cache(async () => {
   const supabase = await createClient()
   const {
     data: { user },
@@ -30,6 +33,18 @@ export async function getMembershipContext() {
     activeOrg: resolveActive(orgs, cookieStore.get(CONTEXT_COOKIE.org)?.value),
     activeCompany: resolveActive(companies, cookieStore.get(CONTEXT_COOKIE.company)?.value),
   }
+})
+
+/**
+ * Contractor portal entry point: the signed-in user's active company, or a
+ * redirect (signed out → /login; no company membership → the landing router).
+ */
+export async function requireActiveCompany() {
+  const ctx = await getMembershipContext()
+  if (!ctx) redirect('/login')
+  if (!ctx.activeCompany) redirect('/')
+  const company = ctx.activeCompany
+  return { ...ctx, company, isContractorAdmin: company.roles.includes('contractor_admin') }
 }
 
 export type MembershipContext = NonNullable<Awaited<ReturnType<typeof getMembershipContext>>>

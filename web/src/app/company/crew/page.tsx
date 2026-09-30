@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { requireActiveCompany } from '@/lib/context/server'
 import { Button } from '@/components/ui/button'
 import { activateWorker, deactivateWorker } from './actions'
 
@@ -44,24 +44,10 @@ function OnboardingBadge({ status }: { status: string }) {
 }
 
 export default async function CrewPage({ searchParams }: Props) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const { supabase, company, isContractorAdmin } = await requireActiveCompany()
+  if (!isContractorAdmin) redirect('/company/profile')
 
-  const { data: membership } = await supabase
-    .from('company_memberships')
-    .select('company_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-  if (!membership) redirect('/login')
-  if (!(membership.roles as string[]).includes('contractor_admin')) {
-    redirect('/company/profile')
-  }
-
-  const companyId = membership.company_id as string
+  const companyId = company.id
 
   // Fetch assigned sites, workers, and activations in parallel.
   const [rawAssignments, rawWorkers, rawActivations] = await Promise.all([

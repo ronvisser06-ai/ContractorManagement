@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { requireActiveCompany } from '@/lib/context/server'
 import { newId } from '@/db/utils'
 import { redirect } from 'next/navigation'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -10,24 +10,13 @@ async function requireContractorAdmin(): Promise<{
   userId: string
   companyId: string
 }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: membership } = await supabase
-    .from('company_memberships')
-    .select('company_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-  if (!membership) redirect('/login')
-  if (!(membership.roles as string[]).includes('contractor_admin')) {
+  // Acts on the user's *active* company, with their role in that company (F0).
+  const { supabase, user, company, isContractorAdmin } = await requireActiveCompany()
+  if (!isContractorAdmin) {
     redirect('/company/crew?error=Only+a+Contractor+Admin+can+manage+crew')
   }
 
-  return { supabase, userId: user.id, companyId: membership.company_id as string }
+  return { supabase, userId: user.id, companyId: company.id }
 }
 
 export async function activateWorker(formData: FormData) {
