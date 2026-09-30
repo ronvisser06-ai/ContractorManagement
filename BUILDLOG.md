@@ -1084,6 +1084,46 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-09-14 → 09-30 — Recovery + Contractor Network v2 planning
+
+**What I Built / Did**:
+- Repo moved out of Dropbox to `C:\Users\Ron Visser\ClaudeProjects\ContractorManagement` (in sync with GitHub, `master` only).
+- **Supabase rebuilt on ConTrak** (`mjmgicubneitwqyaatxp`, ca-central-1): the old Canada project `bqifmsqzrvddevuumift` no longer exists (DNS gone, pooler "tenant not found"). All 18 migrations applied to the empty project; 14 tables with RLS, `pipeline-artifacts` bucket, realtime on `generation_jobs`, triggers + RPCs verified. Local env files repointed. Old test data lost.
+- `e196cf5` — extractor `vercel.json`: removed legacy `builds`/`routes` (Vercel rejects `functions` alongside `builds`); Python pinned via `.python-version` (Vercel ignores `runtime.txt`).
+- `1ea95f6` — `ContractorNetwork-GapAnalysis.md` (gaps G1–G15, decisions D1–D7, build plan F0–F8), `F0-MultiMembership-Brief.md`, decisions 21–24 in FunctionalOverview, milestone **M2.5** in ExecutionPlan.
+
+**What Went Wrong**:
+- `DATABASE_URL` wouldn't parse: the DB password contained `@` and `#`. Fixed by URL-encoding (`%40`, `%23`).
+- Test runs on a fresh Supabase project hit the Auth sign-in **rate limit** when files run in parallel. Workaround: `--test-concurrency=1`.
+- Found: users with 2+ orgs or companies are bounced to create-org or stuck in a redirect loop (G1) → F0.
+
+**Still open (M2 Step 5)**: Vercel Production env still points at the deleted project (`/api/health` 500); extractor Vercel project not created; Inngest Cloud not connected; ConTrak **Confirm email** still on.
+
+---
+
+### 2026-09-30 — F0 Step 1 — Membership context module + tests
+
+**What I Built**:
+- `web/src/lib/context/resolve.ts` — pure types (`OrgContext`, `CompanyContext`), cookie names/options (`ctx_org`, `ctx_company`: httpOnly, sameSite lax, secure in prod, 180 days) and `resolveActive` (cookie's membership if held, else the oldest; forged ids fall back).
+- `web/src/lib/context/query.ts` — `getMyMemberships(supabase, userId)`: all **active** org + company memberships with names and roles, oldest first; RLS-bound (runs as the caller).
+- `web/src/lib/context/server.ts` — `getMembershipContext()`, `getActiveOrg()`, `getActiveCompany()` for layouts/pages/actions; reads cookies, never writes them (Next 16: cookies can't be set during render).
+- `web/src/lib/context/actions.ts` — `switchContext` server action: re-validates the id against the caller's memberships before setting the cookie, then redirects to the portal.
+- Split into four files (brief said one) so the pure logic and the query are importable by `node:test` without Next.js.
+- `web/src/test/membership-context.test.mts` — 9 tests: 4 pure `resolveActive` cases; real Supabase persona with 1 org + 2 companies (admin in one, worker in the other) + 1 disabled membership; outsider sees none of it (RLS); forged cookie can't select the outsider's company. Cleanup removes `public.users` rows too (no new orphans).
+
+**What Went Wrong**: Nothing. No UI changes in this step (by design).
+
+**Tests**: 9/9 new; full DB suite **92/92** sequential (pipeline AI tests not run). tsc strict, lint, production build clean.
+
+**What's Next**: F0 **Step 2** — landing router at `/` + chooser; login and proxy redirect to `/`; layouts' no-membership redirects go to `/`.
+
+**Rules Followed**:
+- ✓ Read the brief + Next 16 cookie docs before building
+- ✓ One step only; no call sites converted yet (Steps 3–4)
+- ✓ Membership selection never grants access — RLS unchanged and tested
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).
