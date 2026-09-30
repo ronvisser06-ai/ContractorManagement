@@ -1124,6 +1124,31 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-09-30 — F0 Step 2 — Landing router + redirect fixes
+
+**What I Built**:
+- `web/src/app/page.tsx` — replaced the create-next-app boilerplate with the **landing router**: signed out → `/login`; exactly one membership → its portal; several → a **chooser** (orgs and companies with the role held in each, "Open" posts `switchContext`); none → create-org. Errors (e.g. from `switchContext`) render on the chooser instead of redirecting.
+- `landingFor()` (pure) + `ROLE_LABEL` in `lib/context/resolve.ts` — the routing decision, unit-tested for every membership combination.
+- Redirects now go to `/`: `login` action, the middleware's "signed-in user on /login or /register", `app/layout.tsx` (no single org — previously a company-or-create-org guess) and `company/layout.tsx` (no single company — previously `/login`).
+
+**Verified (HTTP, local production server)**: scratchpad script seeded 6 personas, signed each in and followed redirects from `/`, `/login`, `/app`, `/company`:
+- 1 org → `/app`; 1 company → `/company/profile`; none → create-org; signed out → `/login`.
+- **2 companies** → chooser (was: pushed to create-org). **2 orgs** → chooser (was: **infinite loop**). 1 org + 1 company → chooser, and both portals still open directly.
+- No loops, no over-long chains. As expected until Steps 3–4, 2-company / 2-org users are sent back to the chooser if they open a portal (layouts still use the single-row lookup). Personas cleaned up (0 left).
+
+**What Went Wrong**: Nothing.
+
+**Tests**: 15/15 in `membership-context.test.mts` (+6 `landingFor`); full DB suite **98/98** sequential. tsc strict, lint, build clean.
+
+**What's Next**: F0 **Step 3** — contractor portal on the active company + company switcher (7 call sites).
+
+**Rules Followed**:
+- ✓ One step only; portal lookups not converted yet
+- ✓ Routing decision isolated in a pure function so every combination is tested
+- ✓ Background server stopped after verification (no orphaned processes)
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

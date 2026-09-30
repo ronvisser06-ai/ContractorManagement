@@ -20,7 +20,9 @@ export default async function CompanyLayout({ children }: { children: React.Reac
     .eq('status', 'active')
     .maybeSingle()
 
-  if (!membership) redirect('/login')
+  // No single active company: the landing router decides. Step 3 switches
+  // this lookup to the active company.
+  if (!membership) redirect('/')
 
   const { data: company } = await supabase
     .from('contractor_companies')

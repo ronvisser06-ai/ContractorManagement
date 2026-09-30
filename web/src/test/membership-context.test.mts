@@ -14,7 +14,7 @@ import assert from 'node:assert/strict'
 import { describe, it, before, after } from 'node:test'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { ulid } from 'ulid'
-import { resolveActive } from '../lib/context/resolve.ts'
+import { landingFor, resolveActive, type MyMemberships } from '../lib/context/resolve.ts'
 import { getMyMemberships } from '../lib/context/query.ts'
 
 // ── Pure selection logic ──────────────────────────────────────────────────────
@@ -40,6 +40,36 @@ describe('resolveActive', () => {
 
   it('returns null when the user has no memberships of that kind', () => {
     assert.equal(resolveActive([], 'cco_A'), null)
+  })
+})
+
+// ── Landing router (F0 Step 2) ───────────────────────────────────────────────
+
+describe('landingFor', () => {
+  const org = (id: string) => ({ id, membershipId: `om_${id}`, name: id, roles: [] })
+  const co = (id: string) => ({ id, membershipId: `mem_${id}`, name: id, roles: [] })
+  const m = (orgs: string[], companies: string[]): MyMemberships => ({
+    orgs: orgs.map(org),
+    companies: companies.map(co),
+  })
+
+  it('no memberships → create an organization', () => {
+    assert.equal(landingFor(m([], [])), '/onboarding/create-org')
+  })
+  it('exactly one org → client portal', () => {
+    assert.equal(landingFor(m(['org_1'], [])), '/app')
+  })
+  it('exactly one company → contractor portal', () => {
+    assert.equal(landingFor(m([], ['cco_1'])), '/company')
+  })
+  it('two companies → chooser (was: pushed to create-org)', () => {
+    assert.equal(landingFor(m([], ['cco_1', 'cco_2'])), 'chooser')
+  })
+  it('two orgs → chooser (was: infinite redirect loop)', () => {
+    assert.equal(landingFor(m(['org_1', 'org_2'], [])), 'chooser')
+  })
+  it('one org + one company → chooser', () => {
+    assert.equal(landingFor(m(['org_1'], ['cco_1'])), 'chooser')
   })
 })
 

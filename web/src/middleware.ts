@@ -52,9 +52,11 @@ export async function middleware(request: NextRequest) {
     (request.nextUrl.pathname === '/login' ||
       request.nextUrl.pathname === '/register')
   ) {
-    const appUrl = request.nextUrl.clone()
-    appUrl.pathname = '/app'
-    return NextResponse.redirect(appUrl)
+    // Send to the landing router, which picks the right portal (F0).
+    const homeUrl = request.nextUrl.clone()
+    homeUrl.pathname = '/'
+    homeUrl.search = ''
+    return NextResponse.redirect(homeUrl)
   }
 
   return supabaseResponse

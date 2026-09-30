@@ -15,7 +15,8 @@ export async function login(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`)
   }
 
-  redirect('/app')
+  // The landing router at `/` picks the right portal (or the chooser).
+  redirect('/')
 }
 
 export async function logout() {

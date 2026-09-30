@@ -45,6 +45,29 @@ export function contextCookieOptions(isProduction: boolean) {
   }
 }
 
+export const ROLE_LABEL: Record<OrgRole | CompanyRole, string> = {
+  client_admin: 'Client Admin',
+  content_developer: 'Content Developer',
+  content_approver: 'Content Approver',
+  foreman: 'Site Foreman',
+  contractor_admin: 'Contractor Admin',
+  worker: 'Worker',
+}
+
+export type Landing = '/app' | '/company' | '/onboarding/create-org' | 'chooser'
+
+/**
+ * Where a signed-in user lands at `/`. Exactly one membership overall → that
+ * portal; several → the chooser; none → create an organization. Never points
+ * at a portal the user has no membership in, so it can't start a redirect loop.
+ */
+export function landingFor({ orgs, companies }: MyMemberships): Landing {
+  const total = orgs.length + companies.length
+  if (total === 0) return '/onboarding/create-org'
+  if (total > 1) return 'chooser'
+  return orgs.length === 1 ? '/app' : '/company'
+}
+
 /**
  * Pick the active membership: the one named by the cookie if the user actually
  * holds it, otherwise the first (oldest) one. A forged or stale cookie falls
