@@ -1,8 +1,8 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { orgRoleEnum } from '@/db/schema'
+import { requireActiveOrg } from '@/lib/context/server'
 
 type OrgRole = (typeof orgRoleEnum.enumValues)[number]
 
@@ -14,12 +14,8 @@ const TOGGLEABLE_ROLES = new Set<OrgRole>([
 ])
 
 export async function toggleRole(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
+  // Acts on the user's *active* org, with their roles in that org (F0).
+  const { supabase, org, hasRole: callerHasRole } = await requireActiveOrg()
 
   const membershipId = formData.get('membership_id') as string | null
   const role = formData.get('role') as string | null
@@ -32,18 +28,8 @@ export async function toggleRole(formData: FormData) {
     redirect('/app/team?error=Invalid+role')
   }
 
-  // Caller's membership — must be client_admin in an active org
-  const { data: callerMembership } = await supabase
-    .from('org_memberships')
-    .select('org_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-
-  if (!callerMembership) redirect('/app/team?error=Not+an+org+member')
-
-  const callerRoles = (callerMembership.roles as OrgRole[] | undefined) ?? []
-  if (!callerRoles.includes('client_admin')) {
+  // Caller must be client_admin in the active org
+  if (!callerHasRole('client_admin')) {
     redirect('/app/team?error=Only+a+client+admin+can+manage+roles')
   }
 
@@ -54,7 +40,7 @@ export async function toggleRole(formData: FormData) {
     .eq('id', membershipId)
     .maybeSingle()
 
-  if (!target || target.org_id !== callerMembership.org_id || target.status !== 'active') {
+  if (!target || target.org_id !== org.id || target.status !== 'active') {
     redirect('/app/team?error=Member+not+found')
   }
 
@@ -73,7 +59,7 @@ export async function toggleRole(formData: FormData) {
     const { data: allActive } = await supabase
       .from('org_memberships')
       .select('roles')
-      .eq('org_id', callerMembership.org_id)
+      .eq('org_id', org.id)
       .eq('status', 'active')
 
     const adminCount = (allActive ?? []).filter((m) =>

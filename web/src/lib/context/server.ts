@@ -12,6 +12,7 @@ import {
   resolveActive,
   type CompanyContext,
   type OrgContext,
+  type OrgRole,
 } from './resolve'
 
 // Wrapped in React cache: a layout and its page share one lookup per request.
@@ -45,6 +46,18 @@ export async function requireActiveCompany() {
   if (!ctx.activeCompany) redirect('/')
   const company = ctx.activeCompany
   return { ...ctx, company, isContractorAdmin: company.roles.includes('contractor_admin') }
+}
+
+/**
+ * Client portal entry point: the signed-in user's active org, or a redirect
+ * (signed out → /login; no org membership → the landing router).
+ */
+export async function requireActiveOrg() {
+  const ctx = await getMembershipContext()
+  if (!ctx) redirect('/login')
+  if (!ctx.activeOrg) redirect('/')
+  const org = ctx.activeOrg
+  return { ...ctx, org, hasRole: (role: OrgRole) => org.roles.includes(role) }
 }
 
 export type MembershipContext = NonNullable<Awaited<ReturnType<typeof getMembershipContext>>>

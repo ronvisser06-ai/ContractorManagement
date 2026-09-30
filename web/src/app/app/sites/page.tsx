@@ -1,10 +1,9 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createSite, assignCompany, removeAssignment } from './actions'
 import { createJob } from '@/app/app/jobs/actions'
+import { requireActiveOrg } from '@/lib/context/server'
 
 interface Props {
   searchParams: Promise<{ error?: string }>
@@ -33,33 +32,17 @@ interface ActivatedWorker {
 }
 
 export default async function SitesPage({ searchParams }: Props) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
-  const { data: membership } = await supabase
-    .from('org_memberships')
-    .select('org_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-
-  if (!membership) redirect('/onboarding/create-org')
-
-  const roles = membership.roles as string[]
-  const isClientAdmin = roles.includes('client_admin')
+  const { supabase, org, hasRole } = await requireActiveOrg()
+  const isClientAdmin = hasRole('client_admin')
   // Matches the "generation_jobs: write if client_admin or content_developer" RLS policy.
-  const canStartGeneration = roles.includes('client_admin') || roles.includes('content_developer')
+  const canStartGeneration = hasRole('client_admin') || hasRole('content_developer')
 
   // RLS ("sites: read if org member") already scopes this to the caller's org;
   // the explicit eq() keeps the query correct if a user ever belongs to >1 org.
   const { data: sites } = await supabase
     .from('sites')
     .select('id, name, created_at')
-    .eq('org_id', membership.org_id)
+    .eq('org_id', org.id)
     .order('created_at', { ascending: false })
 
   const siteIds = (sites ?? []).map((s) => s.id)
@@ -78,7 +61,7 @@ export default async function SitesPage({ searchParams }: Props) {
       ? supabase
           .from('client_company_links')
           .select('company_id, contractor_companies(legal_name)')
-          .eq('org_id', membership.org_id as string)
+          .eq('org_id', org.id)
           .eq('status', 'active')
           .then((r) => r.data ?? [])
       : Promise.resolve([]),

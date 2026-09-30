@@ -1,9 +1,9 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { orgRoleEnum } from '@/db/schema'
 import { Button } from '@/components/ui/button'
 import { logout } from '@/app/(auth)/login/actions'
+import { switchContext } from '@/lib/context/actions'
+import { requireActiveOrg } from '@/lib/context/server'
 
 type OrgRole = (typeof orgRoleEnum.enumValues)[number]
 
@@ -38,31 +38,9 @@ function formatRole(role: string): string {
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
-  const { data: membership } = await supabase
-    .from('org_memberships')
-    .select('org_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-
-  // No single active org: the landing router decides (contractor portal,
-  // chooser, or create-org). Step 4 switches this lookup to the active org.
-  if (!membership) redirect('/')
-
-  const roles = membership.roles as OrgRole[]
-
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('name')
-    .eq('id', membership.org_id)
-    .single()
+  // Client portal: the user's active org (F0). No org → landing router.
+  const { org, orgs, companies } = await requireActiveOrg()
+  const roles: OrgRole[] = org.roles
 
   const visibleNav = NAV_ITEMS.filter((item) => item.roles.some((r) => roles.includes(r)))
   const visibleSoon = COMING_SOON.filter((item) => item.roles.some((r) => roles.includes(r)))
@@ -76,14 +54,44 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               Contractor Orientation
             </Link>
             <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-              {org?.name} · {roles.map(formatRole).join(', ')}
+              {org.name} · {roles.map(formatRole).join(', ')}
             </span>
           </div>
-          <form action={logout}>
-            <Button type="submit" variant="outline" size="sm">
-              Log out
-            </Button>
-          </form>
+          <div className="flex flex-wrap items-center gap-2">
+            {orgs.length > 1 && (
+              <form action={switchContext} className="flex items-center gap-2">
+                <input type="hidden" name="kind" value="org" />
+                <label htmlFor="org-switch" className="sr-only">
+                  Switch organization
+                </label>
+                <select
+                  id="org-switch"
+                  name="id"
+                  defaultValue={org.id}
+                  className="h-8 max-w-48 rounded-md border bg-background px-2 text-sm"
+                >
+                  {orgs.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit" variant="outline" size="sm">
+                  Switch
+                </Button>
+              </form>
+            )}
+            {companies.length > 0 && (
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/">All portals</Link>
+              </Button>
+            )}
+            <form action={logout}>
+              <Button type="submit" variant="outline" size="sm">
+                Log out
+              </Button>
+            </form>
+          </div>
         </div>
 
         <nav className="mx-auto mt-3 flex max-w-3xl flex-wrap items-center gap-1">

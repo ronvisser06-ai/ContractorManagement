@@ -1,7 +1,7 @@
-import { redirect, notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import { orgRoleEnum } from '@/db/schema'
 import { toggleRole } from './actions'
+import { requireActiveOrg } from '@/lib/context/server'
 
 type OrgRole = (typeof orgRoleEnum.enumValues)[number]
 
@@ -25,30 +25,14 @@ interface Props {
 
 export default async function TeamPage({ searchParams }: Props) {
   const { error: errorParam, notice: noticeParam } = await searchParams
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
-  const { data: myMembership } = await supabase
-    .from('org_memberships')
-    .select('org_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-
-  if (!myMembership) notFound()
-
-  const myRoles = (myMembership.roles as OrgRole[] | undefined) ?? []
-  if (!myRoles.includes('client_admin')) redirect('/app')
+  const { supabase, user, org, hasRole } = await requireActiveOrg()
+  if (!hasRole('client_admin')) redirect('/app')
 
   // Fetch all active org members with their user profile
   const { data: memberships } = await supabase
     .from('org_memberships')
     .select('id, user_id, roles')
-    .eq('org_id', myMembership.org_id)
+    .eq('org_id', org.id)
     .eq('status', 'active')
     .order('created_at', { ascending: true })
 

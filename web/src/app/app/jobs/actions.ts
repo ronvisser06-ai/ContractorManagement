@@ -8,6 +8,7 @@ import { inngest } from '@/lib/inngest/client'
 import { generationJobStart } from '@/lib/inngest/events'
 import type { SourceAsset } from '@/contracts/types'
 import { redirect } from 'next/navigation'
+import { requireActiveOrg } from '@/lib/context/server'
 
 const ARTIFACTS_BUCKET = 'pipeline-artifacts'
 const MAX_DECK_BYTES = 25 * 1024 * 1024
@@ -43,22 +44,15 @@ export async function createJob(formData: FormData) {
     redirect('/app/sites?error=Only+.pptx+or+.pdf+decks+are+supported')
   }
 
-  // Org comes from the caller's own active membership — never trust a client-submitted org_id.
-  const { data: membership } = await supabase
-    .from('org_memberships')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-
-  if (!membership) redirect('/onboarding/create-org')
+  // Org comes from the caller's *active* membership (F0) — never trust a client-submitted org_id.
+  const { org } = await requireActiveOrg()
 
   // Confirm the site actually belongs to the caller's org rather than trusting the form value.
   const { data: site } = await supabase
     .from('sites')
     .select('id')
     .eq('id', siteId)
-    .eq('org_id', membership.org_id)
+    .eq('org_id', org.id)
     .maybeSingle()
 
   if (!site) redirect('/app/sites?error=Site+not+found')
@@ -88,7 +82,7 @@ export async function createJob(formData: FormData) {
         .update({ status: 'queued', current_stage: 'queued', error: null, updated_at: new Date().toISOString() })
         .eq('id', existing.id)
       await inngest.send(
-        generationJobStart.create({ jobId: existing.id, siteId, orgId: membership.org_id }),
+        generationJobStart.create({ jobId: existing.id, siteId, orgId: org.id }),
       )
       redirect(`/app/jobs/${existing.id}`)
     }
@@ -132,7 +126,7 @@ export async function createJob(formData: FormData) {
 
   const { error } = await supabase.from('generation_jobs').insert({
     id: jobId,
-    org_id: membership.org_id,
+    org_id: org.id,
     site_id: siteId,
     created_by: user.id,
     source_asset: sourceAsset,
@@ -143,7 +137,7 @@ export async function createJob(formData: FormData) {
     redirect(`/app/sites?error=${encodeURIComponent(error.message)}`)
   }
 
-  await inngest.send(generationJobStart.create({ jobId, siteId, orgId: membership.org_id }))
+  await inngest.send(generationJobStart.create({ jobId, siteId, orgId: org.id }))
 
   redirect(`/app/jobs/${jobId}`)
 }

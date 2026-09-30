@@ -1173,6 +1173,33 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-09-30 — F0 Step 4 — Client portal on the active org + switcher
+
+**What I Built**:
+- `requireActiveOrg()` in `lib/context/server.ts` — active org + `hasRole(role)` for *that* org; signed out → `/login`, no org → `/`.
+- Converted the 10 client-portal call sites: `app/layout.tsx` (lookup + separate org-name query both replaced), `app/contractors/page.tsx` + `actions.ts`, `app/team/page.tsx` + `actions.ts`, `app/sites/page.tsx` + `actions.ts` (`createSite`, `assignCompany`), `app/jobs/actions.ts`. `app/jobs/[jobId]/page.tsx` left as-is — its role lookup is scoped to the **job's** org, which is correct.
+- **Org switcher** in the client header (2+ orgs only; plain form) and "All portals" link to `/` when the user also has a company. Nav and role badge follow the active org.
+- `account/layout.tsx` back-links now come from the membership lists (showed nothing for multi-membership users before).
+
+**Verified (HTTP, local production server, 17/17 checks)** — persona: Client Admin in Org A, only Content Developer in Org B, a site in each:
+- No selection → Org A, only Org A's site, Team nav shown. Real switcher → 303 `/app`, httpOnly `ctx_org` = Org B → only Org B's site, no admin nav, `/app/team` → `/app`.
+- Forged `ctx_org` (another user's org) → ignored; switching to a non-member org → refused, no cookie.
+- `createSite` with Org A active → created in Org A only; with Org B active (not admin) → refused by RLS, nothing created in either org.
+- Org + company user → "All portals" link; account page links to both portals; single-org admin unchanged (no switcher). Personas + sites cleaned up (0 left).
+
+**What Went Wrong**:
+- `team/actions.ts` already had a local `hasRole` (the *target's* roles) — renamed the caller's to `callerHasRole`.
+- Unused imports after conversion (8) — removed. The 4 remaining lint warnings are pre-existing unused imports in `api/health/route.ts`.
+- Orphaned `next start` on 3100 again after stopping the task — killed by PID per the Step 3 note.
+
+**Carried forward**: `createSite` has no app-level role check, so a non-admin sees the raw RLS message ("new row violates row-level security policy…"). Pre-existing; add a friendly `client_admin` check later.
+
+**Tests**: full DB suite **98/98** sequential. tsc strict, lint (no new warnings), build clean.
+
+**What's Next**: F0 **Step 5** — seed the multi-membership persona, click through every page in both contexts in the browser, full test suite, then `Jacques, ship check`.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

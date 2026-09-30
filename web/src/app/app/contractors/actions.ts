@@ -3,29 +3,17 @@
 import { randomBytes } from 'node:crypto'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { newId } from '@/db/utils'
 import { sendEmail, companyInviteEmail } from '@/lib/email/send'
+import { requireActiveOrg } from '@/lib/context/server'
 
 export async function inviteContractorCompany(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: membership } = await supabase
-    .from('org_memberships')
-    .select('org_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-  if (!membership) redirect('/onboarding/create-org')
+  // Acts on the user's *active* org, with their roles in that org (F0).
+  const { supabase, user, org, hasRole } = await requireActiveOrg()
 
   // Application-layer role check; RLS on client_company_links also enforces this.
-  const roles = membership.roles as string[]
-  if (!roles.includes('client_admin')) {
+  if (!hasRole('client_admin')) {
     redirect('/app/contractors?error=Only+a+Client+Admin+can+invite+companies')
   }
 
@@ -36,7 +24,7 @@ export async function inviteContractorCompany(formData: FormData) {
   const { data: existing } = await supabase
     .from('invitations')
     .select('id')
-    .eq('org_id', membership.org_id)
+    .eq('org_id', org.id)
     .eq('email', contactEmail)
     .eq('type', 'company')
     .eq('status', 'pending')
@@ -62,7 +50,7 @@ export async function inviteContractorCompany(formData: FormData) {
   const linkId = newId('ccl_')
   const { error: linkErr } = await supabase.from('client_company_links').insert({
     id: linkId,
-    org_id: membership.org_id,
+    org_id: org.id,
     company_id: companyId,
     status: 'invited',
   })
@@ -81,7 +69,7 @@ export async function inviteContractorCompany(formData: FormData) {
     token,
     channel: 'email',
     email: contactEmail,
-    org_id: membership.org_id,
+    org_id: org.id,
     company_id: companyId,
     intended_roles: ['contractor_admin'],
     status: 'pending',

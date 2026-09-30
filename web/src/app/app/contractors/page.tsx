@@ -1,10 +1,9 @@
-import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { inviteContractorCompany } from './actions'
+import { requireActiveOrg } from '@/lib/context/server'
 
 interface Props {
   searchParams: Promise<{ error?: string; invite_token?: string; invited?: string }>
@@ -72,27 +71,14 @@ function OnboardingBadge({ status }: { status: string }) {
 }
 
 export default async function ContractorsPage({ searchParams }: Props) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: membership } = await supabase
-    .from('org_memberships')
-    .select('org_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-  if (!membership) redirect('/onboarding/create-org')
-
-  const isClientAdmin = (membership.roles as string[]).includes('client_admin')
+  const { supabase, org, hasRole } = await requireActiveOrg()
+  const isClientAdmin = hasRole('client_admin')
 
   // Linked companies for this org, with contractor details embedded
   const { data: rawLinks } = await supabase
     .from('client_company_links')
     .select('id, status, invited_at, company_id, contractor_companies(legal_name, contact_email)')
-    .eq('org_id', membership.org_id)
+    .eq('org_id', org.id)
     .order('invited_at', { ascending: false })
 
   const links = (rawLinks ?? []) as unknown as CompanyLink[]
@@ -101,7 +87,7 @@ export default async function ContractorsPage({ searchParams }: Props) {
   const { data: rawInvites } = await supabase
     .from('invitations')
     .select('token, company_id')
-    .eq('org_id', membership.org_id)
+    .eq('org_id', org.id)
     .eq('type', 'company')
     .eq('status', 'pending')
 

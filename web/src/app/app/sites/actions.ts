@@ -3,24 +3,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { newId } from '@/db/utils'
 import { redirect } from 'next/navigation'
+import { requireActiveOrg } from '@/lib/context/server'
 
 export async function createSite(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
-  // Org comes from the caller's own active membership — never trust a client-submitted org_id.
-  const { data: membership } = await supabase
-    .from('org_memberships')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-
-  if (!membership) redirect('/onboarding/create-org')
+  // Org comes from the caller's *active* membership (F0) — never trust a client-submitted org_id.
+  const { supabase, org } = await requireActiveOrg()
 
   const name = (formData.get('name') as string | null)?.trim() ?? ''
   if (!name) redirect('/app/sites?error=Site+name+is+required')
@@ -29,7 +16,7 @@ export async function createSite(formData: FormData) {
   // of this org_id may actually insert; a non-admin gets a policy violation here.
   const { error } = await supabase.from('sites').insert({
     id: newId('site_'),
-    org_id: membership.org_id,
+    org_id: org.id,
     name,
   })
 
@@ -41,20 +28,9 @@ export async function createSite(formData: FormData) {
 }
 
 export async function assignCompany(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: membership } = await supabase
-    .from('org_memberships')
-    .select('org_id, roles')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-  if (!membership) redirect('/onboarding/create-org')
-  if (!(membership.roles as string[]).includes('client_admin')) {
+  // Acts on the user's *active* org, with their roles in that org (F0).
+  const { supabase, org, hasRole } = await requireActiveOrg()
+  if (!hasRole('client_admin')) {
     redirect('/app/sites?error=Only+a+Client+Admin+can+assign+companies')
   }
 
@@ -67,7 +43,7 @@ export async function assignCompany(formData: FormData) {
   const { data: link } = await supabase
     .from('client_company_links')
     .select('id')
-    .eq('org_id', membership.org_id as string)
+    .eq('org_id', org.id)
     .eq('company_id', companyId)
     .eq('status', 'active')
     .maybeSingle()
