@@ -147,6 +147,18 @@ Mapping to the original phases is noted so you can trace this back to Developmen
 
 ---
 
+### M2.5 — Contractor Network v2  · Size: L · (added 2026-09-30)
+
+**Goal:** turn the lightweight contractor CRM into a full contractor network: org-defined companies with nominated admins (in-house, external, third-party), capabilities, locations and per-location capabilities, contractor locations mapped to client facilities, rich worker profiles with a self-declared credential wallet and experience, and orientation records on the profile.
+
+**Features (in order, one at a time):** F0 multi-membership context → F1 org defines company + assigns admin → F2 capability catalog → F3 company locations + location capabilities → F4 location ↔ facility mapping → F5 worker work profile → F6 credential wallet + experience → F7 orientation records on the profile → F8 visibility hardening + cleanup.
+
+**Plan, gap analysis and decisions:** `ContractorNetwork-GapAnalysis.md`. **First brief:** `F0-MultiMembership-Brief.md`.
+
+**Dependencies:** M1. F7 builds the `orientation_completions` table ahead of M3, whose player then writes into it. **Runs before M3.** M2 Step 5 (production wiring) is independent and can land alongside.
+
+---
+
 ### M3 — Contractor Orientation Experience & QR Issuance  · Size: L · (was Phase 4 contractor-facing half)
 
 **Goal:** A contractor completes an assigned orientation, passes the quiz, and receives a QR code.
@@ -329,6 +341,24 @@ The MVP already contains one agent loop (generation + QA). The deep dive surface
 **Noted, not scheduled:** broader ingestion agent (manuals/PDFs/SharePoint → modules), localization agent (translate content model + quiz, flag safety-critical terms), analytics-narrative agent (plain-English dashboard insights). The **certificate-extraction agent** remains the marquee CertsCheck future item.
 
 > Sequencing intent (Ron): get core development underway, then explore the orientation help agent and the regulatory-change monitor first among the parked items.
+
+---
+
+## 7b. Roadmap candidate — Manual authoring modality + per-client AI toggle (post-M2)
+
+Captured during M2 (2026-06-28); full reasoning in DesignRationalization.md Part C. **Not part of M2–M5 as currently scoped — slotted here so it isn't lost and doesn't derail the current build.**
+
+**What:** a **manual authoring** path (build an orientation directly in the app — paste text into typed blocks, upload images/video) as the entry-level modality, with the **AI extraction pipeline gated behind a per-client admin toggle** (a client-level feature flag). Quiz generation and the Develop → Approve → Publish flow are unchanged for both.
+
+**Why it's contained:** it's a *second producer* of the same `ContentModel`; everything downstream is producer-agnostic, and the **Step 4 bounded editor is already a ContentModel editor** (manual authoring ≈ that editor opened on a blank model). It's the bounded re-introduction of the manual builder deferred in §1.
+
+**Likely shape (decide MVP when picked up):**
+- "Create from blank" → the bounded editor on an empty ContentModel → quiz-gen → approve → publish (mostly existing pieces).
+- Optional middle modality: **paste text → the `structure` stage → ContentModel** (AI-assisted authoring; reuses the structure stage with text input instead of a deck).
+- Per-client feature flag (`ai_extraction_enabled` on the org/client) gating the deck-upload pipeline.
+- QA adapts: `fidelity` dimension N/A for manual content; keep `coverage` + `correctness`.
+
+**Sequencing:** independent of M3 (the contractor experience consumes a *published* orientation regardless of authoring method), so it could slot **before or alongside M3**. Decide placement and MVP scope the moment M2 ships.
 
 ---
 

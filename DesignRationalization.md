@@ -74,4 +74,21 @@
 
 ---
 
+## Part C — Manual authoring modality + per-client AI toggle (captured 2026-06-28, during M2)
+
+**The idea (Ron):** offer a **manual authoring** path — a user builds an orientation directly in the app (paste text into typed blocks, upload images, attach video) — as the entry-level modality, with the **full AI extraction pipeline gated behind a per-client admin toggle**. Either way, AI builds the quiz and the Develop → Approve → Publish flow is unchanged.
+
+**Why it fits the architecture (and is far less new work than it sounds):** the platform is built around the **ContentModel** (closed block-type set) as the central artifact. The AI pipeline is just *one producer* of a ContentModel (deck → extract → structure → ContentModel); everything downstream — renderer, quiz generation, QA, the bounded approval editor, publish — consumes the ContentModel and is **agnostic to how it was produced**. So a manual authoring UI is simply a **second producer of the same artifact**, and downstream is untouched. Critically, the **Step 4 bounded editor is already a ContentModel editor** — manual authoring is largely that same editor opened on a *blank* model. This also resurrects the manual builder deferred in Part A / ExecutionPlan §1, but now **bounded** by the closed block set and reusing the editor, so it avoids the runaway-WYSIWYG risk that drove the original deferral.
+
+**Strategic value:** a low-friction entry tier that works without AI cost/latency/large-deck issues; AI extraction becomes a per-client **upsell + cost-control lever** (a client-level feature flag). De-risks the AI dependency for onboarding and demos.
+
+**Refinements to weigh at design time:**
+- **Middle modality — "paste text → AI structures it":** feed pasted text (not a deck) into the existing `structure` stage to produce the typed-block ContentModel, then human-edit. Reuses the AI already built; may be the sweet spot between tedious pure-manual and heavy full-deck extraction.
+- **QA scope shifts for manual content:** no source deck means the `fidelity` dimension doesn't apply; QA still scores `coverage` + `correctness` (catching unsupported quiz answers).
+- **Expectation-setting:** "paste from PPT" gets text in, but the user still organizes it into block types, and images/formatting become explicit uploads — it's "paste-assisted authoring," not "paste and done."
+
+**Disposition:** strong, on-architecture idea — but **not** part of M2–M5; capturing it now so M2 isn't derailed. Slotted as a post-M2 roadmap milestone (ExecutionPlan §7b). Independent of M3 (the contractor experience consumes a *published* orientation regardless of how it was authored), so it could even precede M3. MVP scope to be decided when picked up.
+
+---
+
 *End of DesignRationalization.md*

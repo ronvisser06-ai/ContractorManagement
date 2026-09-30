@@ -51,6 +51,8 @@ A client invites contractor companies into the system. A contractor company buil
 
 A single worker has **one identity** that can carry relationships with multiple clients at once — one login, many client relationships, many orientations, and **one** QR proof. A worker may hold more than one verified email and consolidate them under that single identity. To prevent accidental duplicate accounts, registration performs a **soft match** on mobile number and name and prompts "is this you?" before creating a new identity; admins also have a merge tool. Because a worker may work for several contractor companies, Foremen and Client Admins can see **how many contractor companies a given worker is associated with**.
 
+> **Being extended (Contractor Network v2, approved 2026-09-30):** org-defined companies with nominated admins (in-house, external or third-party), company and location capabilities from a shared catalog, contractor locations mapped to client facilities, richer worker profiles (work contact, LinkedIn, base location, self-declared tickets/certificates/designations, experience) and orientation records on the profile. Plan and decisions: `ContractorNetwork-GapAnalysis.md`. This section will be rewritten as each feature lands.
+
 ### 3.3 Orientation creation & approval
 A site's orientation is a structured package of content — sections, text, images, video, hazard information — paired with a quiz. The system can produce a first draft of the content and quiz automatically from source material (such as an existing slide deck), but a person always reviews and corrects it. An orientation goes live only when someone holding the **Content Approver** role signs off and publishes it.
 
@@ -162,6 +164,11 @@ A Client Admin sets up a site and assigns its orientation → invites a contract
 | 18 | Scan status adds **Incomplete**, distinct from **Not Found**. |
 | 19 | Video integrity: skip is hidden until the video completes; choosing skip warns and restarts the orientation. |
 | 20 | Terminology: the orientation approver is the **Content Approver** (the pipeline's "Safety Professional"). |
+| **Contractor Network v2 (2026-09-30) — see ContractorNetwork-GapAnalysis.md §5** | |
+| 21 | Workers keep a **self-declared credential wallet** (tickets, certificates, designations, with expiry). Certs Check's *verification* stays out of scope. (D1) |
+| 22 | Capabilities come from a **platform-wide catalog** plus company-specific custom entries. (D2) |
+| 23 | An org can **create a contractor company** and nominate its admin; existing companies are matched and linked, not duplicated; the company's admins maintain its profile afterwards. (D3) |
+| 24 | A worker sees all their records; their company admins see their profile and credentials; a client sees credentials for linked companies' workers but **orientation records only for its own facilities**. (D5) |
 
 ---
 
@@ -176,7 +183,7 @@ All functional decisions from the review are now confirmed. No "What"-level item
 Not part of what we are building now, though part of the longer vision:
 
 - **Mobile applications** (contractor app, foreman native app).
-- **Certs Check** — certification & licensing verification, AI certificate capture, compliance engine, combined orientation + certification status, daily deficiency reports.
+- **Certs Check** — certification & licensing *verification*, AI certificate capture, compliance engine, combined orientation + certification status, daily deficiency reports. *(A self-declared credential list on the worker profile is now in scope — decision #21.)*
 - Trade-specific or multiple orientations per site; jurisdiction-driven requirements.
 - Advanced question types, multi-language content, SSO, bulk import, offline scanning, digital wallet, badge printing.
 
