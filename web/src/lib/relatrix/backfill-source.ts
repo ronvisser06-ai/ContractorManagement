@@ -34,12 +34,12 @@ export function databaseSource(supabase: SupabaseClient): FactsSource {
     async companyInvites() {
       const rows: Record<string, string | null>[] = []
       for (let from = 0; ; from += PAGE) {
-        const { data, error } = await supabase.from('invitations').select('id, org_id, created_at').eq('type', 'company').order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, from + PAGE - 1)
-        if (error) throw new Error(`Could not read invitations: ${error.message}`)
+        const { data, error } = await supabase.from('client_company_links').select('id, org_id, invited_at').order('invited_at', { ascending: true }).order('id', { ascending: true }).range(from, from + PAGE - 1)
+        if (error) throw new Error(`Could not read company links: ${error.message}`)
         rows.push(...((data ?? []) as Record<string, string | null>[]))
         if (!data || data.length < PAGE) break
       }
-      return dated(rows, 'created_at')
+      return dated(rows, 'invited_at')
     },
     async queued() {
       const m = new Map<string, string>()

@@ -2,11 +2,12 @@ import { headers } from 'next/headers'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import Link from 'next/link'
 import { inviteContractorCompany } from './actions'
 import { requireActiveOrg } from '@/lib/context/server'
 
 interface Props {
-  searchParams: Promise<{ error?: string; invite_token?: string; invited?: string }>
+  searchParams: Promise<{ error?: string; invite_token?: string; invited?: string; defined?: string; linked?: string }>
 }
 
 interface CompanyInfo {
@@ -145,7 +146,7 @@ export default async function ContractorsPage({ searchParams }: Props) {
   const proto = host.startsWith('localhost') || /^\d+\.\d/.test(host) ? 'http' : 'https'
   const baseUrl = `${proto}://${host}`
 
-  const { error, invite_token: newToken, invited } = await searchParams
+  const { error, invite_token: newToken, invited, defined, linked } = await searchParams
   const newInviteUrl = newToken ? `${baseUrl}/register/company?token=${newToken}` : null
 
   return (
@@ -164,12 +165,32 @@ export default async function ContractorsPage({ searchParams }: Props) {
         </div>
       )}
 
+      {defined && !newInviteUrl && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Company added.</div>
+      )}
+
+      {linked && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Link requested. The company’s administrator {linked === 'told' ? 'has been emailed and' : 'will'} need to accept before it shows as active.
+        </div>
+      )}
+
       {newInviteUrl && (
         <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm">
           <p className="mb-1.5 font-medium text-green-800">
             Invite created — share this link with the company contact (dev mode, no email sent):
           </p>
           <code className="block break-all font-mono text-xs text-green-900">{newInviteUrl}</code>
+        </div>
+      )}
+
+      {isClientAdmin && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border bg-card p-4">
+          <div>
+            <h2 className="text-sm font-medium">Add a contractor company</h2>
+            <p className="text-xs text-muted-foreground">Enter its details, link it if it is already on the platform, and name its administrator.</p>
+          </div>
+          <Link href="/app/contractors/new" className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">Add company</Link>
         </div>
       )}
 

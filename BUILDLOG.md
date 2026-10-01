@@ -1329,6 +1329,20 @@ Nothing changed in this repository's code. Relatrix gained what S4 and S5 call: 
 
 ---
 
+### 2026-10-05 — M2.5 F1b — the "Add a contractor company" form
+
+**What I Built**:
+- `/app/contractors/new` (Client Admins only; linked from Contractors): legal name, contact, trades, and who administers it (someone in our organization / someone at the company / a third party). Submitting first **looks for a match**; if there is one it is shown (name only) with "Link to this company" or "create a new company anyway", and what was typed is kept. Linking asks the company's admins by email to accept (the screen for accepting is F1c). An external or third-party admin is emailed an invitation carrying the type; with no mail service the dev link is shown, as before.
+- `lib/companies/define.ts` holds the flow (no Next imports) so it can be driven against a real database; the server action is thin. If naming the admin fails after the company was made, the company is kept and the reason shown.
+- **Relatrix "Adopting"** now counts a company *link* (an invite, a defined company or a link all make one), not only an email invitation, so an in-house company moves the customer too. The S6 backfill reads links the same way.
+- Checked: `scripts/check-define-company-flow.mjs` drives the real flow as signed-in users through PostgREST on the scratch database (8 checks; 8 mutations of `define.ts`, each caught). The page and form were then **rendered and driven in a browser** at phone width against that stack: create with an email admin, the look-alike offered with typed values kept, "anyway", an in-house admin, and no console errors beyond a hydration notice caused by the automation's `caret-color` injection.
+
+**Not verified**: not applied to production (migration 0019 first); email sending was a recording stub, never a real Resend send; the company-side accept screen does not exist yet.
+
+**What's Next**: F1c: the company portal lists pending link requests (accept or decline) and its admins (add, remove).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

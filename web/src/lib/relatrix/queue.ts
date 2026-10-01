@@ -26,14 +26,15 @@ export async function queueOrgLifecycle(orgId: string): Promise<boolean> {
     const [firstSite, firstPackage, invite] = await Promise.all([
       first('sites', 'created_at', orgId),
       first('orientation_packages', 'published_at', orgId),
-      // A contractor company invite; worker invites are not "a contractor".
-      supabase.from('invitations').select('created_at').eq('org_id', orgId).eq('type', 'company').order('created_at', { ascending: true }).limit(1),
+      // A contractor company brought in, by an email invite, by defining it, or by linking to one: all make a link.
+      // Worker invites are not "a contractor".
+      supabase.from('client_company_links').select('invited_at').eq('org_id', orgId).order('invited_at', { ascending: true }).limit(1),
     ])
     if (invite.error) throw new Error(invite.error.message)
 
     const payload = orgLifecyclePayload(
       { id: org.id as string, name: org.name as string, createdAt: org.created_at as string },
-      { firstSite, firstPackage, firstContractorInvite: (invite.data?.[0]?.created_at as string | undefined) ?? null },
+      { firstSite, firstPackage, firstContractorInvite: (invite.data?.[0]?.invited_at as string | undefined) ?? null },
     )
     const result = await databaseStore(supabase).enqueue('client_org', orgId, 'org.customer', payload)
     // Wake the drain rather than wait for the next minute. Best effort: the schedule covers a lost event.
