@@ -1313,9 +1313,9 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 - **Invite email crash (pre-existing, Step 2):** `sendEmail` throws when Resend rejects a recipient. With the test sender `onboarding@resend.dev`, Resend only delivers to the account owner → in production **every invite to anyone else returns 500 after the invite is created**. Step 2: verified sending domain + fallback to showing the link.
 - Logged for **F8**: the 8 RLS helper functions (`user_org_ids(uid)` etc.) are executable by `anon`/`authenticated` with an arbitrary user id → reveals which orgs/companies/sites a user id belongs to (ids only). Fix = move helpers to a non-exposed schema and rewrite the policies.
 
-**Production**: migration **not yet applied** to ConTrak — recommended now (security), ahead of the brief's Step 5: `npm run db:migrate:prod`.
+**Production**: **0018 applied to ConTrak 2026-10-01** (Ron approved; ahead of the brief's Step 5 because of the security fixes and because the deployed invite action already writes `created_by_org_id`). Verified on production: 19/19 migrations, 4/4 new company columns, 10/10 new RPCs, `declined` link status; `accept_company_invite` / `claim_worker_invite` no longer executable by `anon` or `authenticated`; the only org link write policy is "insert invited for own company"; `/api/health` ok.
 
-**What's Next**: apply 0018 to production → F1 Step 2 (org "Add company" flow + invite delivery fix).
+**What's Next**: F1 Step 2 (org "Add company" flow + invite delivery fix) — fresh conversation recommended (Rule 18).
 
 ---
 
