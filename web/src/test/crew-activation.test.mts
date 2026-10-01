@@ -175,6 +175,7 @@ describe('Crew activation — RLS (site_company_assignments + site_worker_activa
         user_id: uid,
         company_id: cid,
         roles,
+        admin_type: roles.includes('contractor_admin') ? 'external' : null, // migration 0019
         onboarding_status: 'account_created',
         invited_email: `placeholder-${uid}@example.com`,
         status: 'active',

@@ -182,6 +182,7 @@ describe('Expected-on-site + cross-company summary — RLS', () => {
       user_id: contractorAdminUser.id,
       company_id: company1Id,
       roles: ['contractor_admin'],
+      admin_type: 'external', // required once migration 0019 is applied
       onboarding_status: 'account_created',
       invited_email: `placeholder-${contractorAdminUser.id}@example.com`,
       status: 'active',

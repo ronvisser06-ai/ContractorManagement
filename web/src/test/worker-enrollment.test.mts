@@ -84,6 +84,7 @@ describe('Worker enrollment RLS', () => {
       user_id: contractorAdminId,
       company_id: companyId,
       roles: ['contractor_admin'],
+      admin_type: 'external', // required once migration 0019 is applied
       onboarding_status: 'account_created',
       status: 'active',
     })

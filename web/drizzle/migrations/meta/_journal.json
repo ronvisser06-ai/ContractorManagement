@@ -134,6 +134,13 @@
       "when": 1783278000000,
       "tag": "0018_crm_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783364400000,
+      "tag": "0019_company_admins",
+      "breakpoints": true
     }
   ]
 }

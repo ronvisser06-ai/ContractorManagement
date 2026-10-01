@@ -123,6 +123,7 @@ before(async () => {
     user_id: contractorAdminUserId,
     company_id: companyId,
     roles: ['contractor_admin'],
+    admin_type: 'external', // required once migration 0019 is applied
     status: 'active',
     onboarding_status: 'account_created',
   })
@@ -323,6 +324,7 @@ test('linked client cannot write a company_membership into the contractor compan
     user_id: linkedClientUserId,
     company_id: companyId,
     roles: ['contractor_admin'],
+    admin_type: 'external', // required once migration 0019 is applied
     status: 'active',
     onboarding_status: 'account_created',
   })

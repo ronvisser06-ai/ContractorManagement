@@ -155,6 +155,7 @@ describe('getMyMemberships — real Supabase', () => {
       user_id: personId,
       company_id: coAdminId,
       roles: ['contractor_admin'],
+      admin_type: 'external', // required once migration 0019 is applied
       onboarding_status: 'account_created',
       status: 'active',
     })
@@ -179,6 +180,7 @@ describe('getMyMemberships — real Supabase', () => {
       user_id: outsiderId,
       company_id: coOtherId,
       roles: ['contractor_admin'],
+      admin_type: 'external', // required once migration 0019 is applied
       onboarding_status: 'account_created',
       status: 'active',
     })

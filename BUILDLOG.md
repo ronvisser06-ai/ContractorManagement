@@ -1313,6 +1313,22 @@ Nothing changed in this repository's code. Relatrix gained what S4 and S5 call: 
 
 ---
 
+### 2026-10-05 — M2.5 F1a — org-defined companies and admin nomination (database)
+
+**Decisions (Ron)**: a company that already exists is *linked*, not duplicated, and its admin must accept the link (the org sees only the company's name); a third-party admin is a labelled person, not a managing company.
+
+**What I Built** (migration `0019_company_admins.sql`; the screens are F1b and F1c):
+- `company_memberships.admin_type` (`in_house` / `external` / `third_party`), set exactly when the row holds `contractor_admin` (a CHECK), plus `nominated_by_org_id`; `invitations.admin_type`; `contractor_companies.defined_by_org_id` and a generated `normalized_name`.
+- `match_contractor_companies` (normalised name or contact email; returns only an id, a name and whether already linked), `define_contractor_company` (create, refuse a duplicate unless chosen, or link to a match: never to an arbitrary id), `nominate_company_admin` (only the org that defined the company; in-house nominee must be an active org member and is admin at once, others get an invitation carrying the type), `remove_company_admin` (a company keeps at least one admin; the company's admins, or the org that nominated one, may remove), `respond_to_company_link`. `accept_company_invite` now records the admin type and no longer overwrites a name the org typed.
+- Tested against a **scratch Postgres with the real schema** (`scripts/check-company-admins-sql.mjs`: 15 checks, rolled back each). Every guard was removed in turn (14 mutations) and the right check failed.
+- Existing tests that insert a contractor admin now set `admin_type`, or they would fail once 0019 is applied. They were not run (they hit production); typecheck is clean.
+
+**Not verified**: not applied to production; the existing production-backed suites were not re-run against 0019.
+
+**What's Next**: F1b, the org's "add a contractor company" form (match, link or create, nominate) and the company-side pending-link and admin list (F1c).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).
