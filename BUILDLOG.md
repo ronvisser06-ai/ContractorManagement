@@ -1270,6 +1270,27 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-10-01 — Fix: "Expected on site" always empty on the Sites page
+
+**Root cause**: `site_worker_activations` has two FKs to `users` (`user_id` = worker, `activated_by` = Contractor Admin). The page's unhinted `users(given_name, family_name)` embed failed with PostgREST **PGRST201** (ambiguous relationship), and `.then((r) => r.data ?? [])` swallowed the error → empty list since M1 Step 5b (`fce6a9d`). The test missed it because it selected only `user_id`, never the page's embed.
+
+**What I Built**:
+- `web/src/lib/queries/expected-on-site.ts` — `fetchExpectedOnSite(supabase, siteIds)`: the page's query in one place, embed hinted as `users!site_worker_activations_user_id_users_id_fk(...)`, and it **throws** on error instead of returning `[]`.
+- `app/app/sites/page.tsx` uses it (local `ActivatedWorker` type moved to the shared module).
+- `expected-on-site.test.mts`: +2 tests that call the same function — the activated worker comes back with **their own** name ("Alice Worker", not the activating admin's), non-activated worker excluded, unrelated client gets nothing (RLS).
+- Checked the other `users(...)` embeds (`company/workers`, `company/crew`) — both from `company_memberships`, single FK, unaffected.
+
+**Verified**:
+- Regression test proven: with the old unhinted embed temporarily restored, both new tests **fail with PGRST201**; with the fix they pass.
+- Real page (production build via preview runner, demo persona on ConTrak Dev): `/app/sites` shows "Expected on site (1) — Sam Scaffold · F0 Demo — Apex Scaffolding"; Riley (not activated) absent. Persona removed afterwards.
+- Full DB suite **100/100** on ConTrak Dev; tsc + lint + build clean.
+
+**Noise, not a bug**: server log shows Sentry envelope proxy timeouts (`ETIMEDOUT` to `*.ingest.us.sentry.io`) from this PC — Sentry reporting, unrelated to the fix.
+
+**What's Next**: F1 — org defines a contractor company + assigns its admin (fresh conversation, Rule 18: "Jacques, start feature F1").
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

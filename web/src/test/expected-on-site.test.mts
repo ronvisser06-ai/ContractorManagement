@@ -19,6 +19,7 @@ import assert from 'node:assert/strict'
 import { describe, it, before, after } from 'node:test'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { ulid } from 'ulid'
+import { fetchExpectedOnSite } from '../lib/queries/expected-on-site.ts'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -237,6 +238,25 @@ describe('Expected-on-site + cross-company summary — RLS', () => {
       userIds.includes(worker1Id),
       `Expected worker1 in expected-on-site set; got: ${JSON.stringify(userIds)}`,
     )
+  })
+
+  // ── Test 1b: the Sites page's exact query (shared function) ────────────────
+  // Regression for PGRST201: site_worker_activations has two FKs to users, so
+  // an unhinted users(...) embed fails and the page showed an empty list.
+
+  it('Sites page query (fetchExpectedOnSite) returns the activated worker with their name', async () => {
+    const rows = await fetchExpectedOnSite(clientAdminClient, [siteId])
+    const alice = rows.find((r) => r.user_id === worker1Id)
+    assert.ok(alice, `Expected worker1 in the page query result; got: ${JSON.stringify(rows)}`)
+    // Must be the WORKER's name (user_id FK), not the activating admin's (activated_by FK).
+    assert.deepEqual(alice.users, { given_name: 'Alice', family_name: 'Worker' })
+    assert.ok(alice.contractor_companies?.legal_name, 'company name embedded')
+    assert.ok(!rows.some((r) => r.user_id === worker2Id), 'non-activated worker excluded')
+  })
+
+  it('Sites page query: unrelated client sees nothing for this site (RLS)', async () => {
+    const rows = await fetchExpectedOnSite(unrelatedClient, [siteId])
+    assert.deepEqual(rows, [])
   })
 
   // ── Test 2: non-activated worker excluded ──────────────────────────────────

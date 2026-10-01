@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label'
 import { createSite, assignCompany, removeAssignment } from './actions'
 import { createJob } from '@/app/app/jobs/actions'
 import { requireActiveOrg } from '@/lib/context/server'
+import { fetchExpectedOnSite, type ActivatedWorker } from '@/lib/queries/expected-on-site'
 
 interface Props {
   searchParams: Promise<{ error?: string }>
@@ -22,14 +23,6 @@ interface LinkedCompany {
   contractor_companies: { legal_name: string } | null
 }
 
-interface ActivatedWorker {
-  id: string
-  site_id: string
-  user_id: string
-  company_id: string
-  users: { given_name: string; family_name: string } | null
-  contractor_companies: { legal_name: string } | null
-}
 
 export default async function SitesPage({ searchParams }: Props) {
   const { supabase, org, hasRole } = await requireActiveOrg()
@@ -65,17 +58,8 @@ export default async function SitesPage({ searchParams }: Props) {
           .eq('status', 'active')
           .then((r) => r.data ?? [])
       : Promise.resolve([]),
-    // §4.5: expected-on-site is the activated crew (status=active).
-    // The embedded users join resolves via "users: read if activated on org site"
-    // policy (migration 0013) — client_admin reads activated worker profiles.
-    isClientAdmin && siteIds.length > 0
-      ? supabase
-          .from('site_worker_activations')
-          .select('id, site_id, user_id, company_id, users(given_name, family_name), contractor_companies(legal_name)')
-          .in('site_id', siteIds)
-          .eq('status', 'active')
-          .then((r) => r.data ?? [])
-      : Promise.resolve([]),
+    // §4.5: expected-on-site is the activated crew (status=active) — shared query.
+    isClientAdmin ? fetchExpectedOnSite(supabase, siteIds) : Promise.resolve([]),
   ])
 
   const assignments = rawAssignments as unknown as SiteAssignment[]
