@@ -11,6 +11,7 @@
 // The persona's sign-in is written to web/.env.f0-persona.local (git-ignored);
 // the password is never printed.
 
+import '../src/test/guard-not-production.mts' // never seed the production project
 import { randomBytes } from 'node:crypto'
 import { existsSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'

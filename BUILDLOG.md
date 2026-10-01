@@ -1248,6 +1248,28 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-10-01 — Separate dev/test database (ConTrak Dev) + production guard
+
+**What I Built / Did**:
+- **ConTrak Dev** (`beqqylwwbieqoakdiphy`): new free Supabase org + project, Canada (Central), Confirm email off. All 18 migrations applied; schema verified identical to production (14 tables all with RLS + policies, `pipeline-artifacts` bucket, realtime on `generation_jobs`, `on_auth_user_created` trigger, 6 key RPCs).
+- `web/.env.local` and `python-extractor/.env` now point at ConTrak Dev. Production values kept in git-ignored `web/.env.contrak-prod.backup` / `python-extractor/.env.contrak-prod.backup` (Next.js doesn't load these names).
+- `web/src/test/guard-not-production.mts` — refuses to run (exit 1) if `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_URL` or `DATABASE_URL` contains the production ref. Preloaded by `npm test` (`--import`) and imported by `scripts/seed-f0-persona.mjs`. Verified: refuses with production settings, passes with dev.
+- `npm test` now also runs files sequentially (`--test-concurrency=1`) — no more Auth sign-in rate-limit cancellations.
+- `npm run db:migrate:prod` — explicit production migration (loads the prod backup env; `dotenv` in `drizzle.config.ts` doesn't override it). Verified it resolves to ConTrak and `db:migrate` to ConTrak Dev, without running anything against production.
+- `CLAUDE.md` §7: which DB is which, the guard, and the migrate commands.
+
+**What Went Wrong**:
+- Dev DB password rejected twice (`28P01`): first a password with `@`/`%`, then a mismatch after a retyped reset. Fixed by resetting to letters+digits and **copy-pasting** the same value into the dashboard and the file; the pooler then took ~20s to accept it.
+- 1 test failed on ConTrak Dev: `worker-claim` "expired token" — the invite expired "1s ago" by the **PC clock, which runs ~1.1s ahead of the DB servers**, so the server still saw it as valid. Same 1s margin in `accept-company-invite`. Both now use "expired an hour ago". Not an app bug.
+
+**Tests**: full DB suite **98/98** on ConTrak Dev (pipeline AI tests not run). Production (ConTrak) confirmed untouched — 0 users. tsc + lint clean.
+
+**Notes**: ConTrak Dev is a free project — it pauses after ~7 idle days (restore from the dashboard). The older test suites still leave orphaned `public.users` rows — harmless on dev; proper cleanup is F8.
+
+**What's Next**: expected-on-site fix + a test that runs the page's exact query → F1 (fresh conversation, Rule 18).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

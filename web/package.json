@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --env-file=.env.local --test \"src/test/**/*.test.mts\"",
+    "test": "node --env-file=.env.local --import ./src/test/guard-not-production.mts --test --test-concurrency=1 \"src/test/**/*.test.mts\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:prod": "node --env-file=.env.contrak-prod.backup ./node_modules/drizzle-kit/bin.cjs migrate",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

@@ -278,7 +278,7 @@ describe('Worker invite claim — RPC and RLS', () => {
       company_id: rpcCompanyId,
       intended_roles: ['worker'],
       status: 'pending',
-      expires_at: new Date(Date.now() - 1000).toISOString(), // already expired
+      expires_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // expired an hour ago (a 1s margin is within PC/server clock skew)
       created_by: expId,
     })
 

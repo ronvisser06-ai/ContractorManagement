@@ -125,7 +125,7 @@ describe('accept_company_invite RPC', () => {
       channel: 'email',
       email: 'expired@example.com',
       status: 'pending',
-      expires_at: new Date(Date.now() - 1000).toISOString(), // already expired
+      expires_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // expired an hour ago (a 1s margin is within PC/server clock skew)
       created_by: clientUserId,
     })
 

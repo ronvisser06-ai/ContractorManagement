@@ -96,6 +96,7 @@ Build in this order (ExecutionPlan §3). A milestone is **not** a feature — in
 
 - **Test after every change** in the browser (Rule 7). Build an **RLS test** (no cross-tenant leakage) and a **pipeline eval harness** (sample deck → expected content model/quiz/verdict) early — they are the regression net.
 - **Commit to git after every working feature** (Rule 9), clear message. Run lint + tests before commit.
+- **Databases:** local dev + all tests use **ConTrak Dev** (`beqqylwwbieqoakdiphy`, free org) via `web/.env.local`. **Production** is **ConTrak** (`mjmgicubneitwqyaatxp`), configured only in Vercel + `web/.env.contrak-prod.backup` (git-ignored). `npm test` and `scripts/` refuse to run against production (`src/test/guard-not-production.mts`). Schema changes: `npm run db:migrate` (dev), then deliberately `npm run db:migrate:prod`.
 - **One conversation per feature** (Rule 18); `/compact` when long (Rule 11).
 - **Update BUILDLOG.md** after each feature (Rule 19): what I built, what broke + fix, what's next.
 - **Ship before perfect** (Rule 20): when the feature works and looks decent, ship and get feedback.
