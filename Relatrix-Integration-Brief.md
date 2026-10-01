@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed 2026-10-04**, awaiting Ron's approval of §7. Nothing here is built. |
+| **Status** | **Approved 2026-10-04** with Ron's answers to D-1 to D-4 (§7, which **revised §1, §3 and §5**). Nothing here is built yet. |
 | **Decided with Ron (2026-10-04)** | Purpose: **both** the contractor network and ConTrak's own customers as a pipeline. Tenancy: **one Relatrix workspace, Ron's own**, one API client. |
 | **Counterpart** | `ronvisser06-ai/RelatrixCRM`, `BUILD.md` §8 (the Planitize hand-off is the template), C10 (integration order), C17 (capabilities). |
 
@@ -10,7 +10,7 @@
 
 ## 1. The three questions (Rule 1)
 
-**What exactly?** ConTrak pushes company-level facts to Relatrix so Ron can see them there: (A) every contractor company ConTrak knows, with its capabilities; (B) every client organization that uses ConTrak, as a customer on a sales pipeline. Relatrix is never the system of record for anything ConTrak enforces (orientations, QR, crew activation).
+**What exactly?** ConTrak pushes company-level facts to Relatrix so Ron has (A) a **master list of companies showing which companies use which vendors and contractors**, every one marked as coming from ConTrak, and (B) ConTrak's own customers, the client organizations, as deals on a separate **"ConTrak customers"** pipeline. Relatrix stays Ron's CRM and contacts database: ConTrak companies are **not** put on his main sales pipeline and **no people** cross; he adds a ConTrak company to the main pipeline by hand when it is appropriate. Relatrix is never the system of record for anything ConTrak enforces (orientations, QR, crew activation).
 
 **Who for?** Ron, as the person who sells and supports ConTrak and wants one CRM across his products. Not for ConTrak's tenants: they never see Relatrix.
 
@@ -22,16 +22,18 @@
 - Relatrix API today (BUILD.md §6.3): companies, contacts, pipelines (read only), deals with `POST /deals/:id/stage`, activities, relationships, a contact's emails/phones/jobs. Keys are scoped, requests carry `Idempotency-Key`, lists filter by `external_ref[<app>]`, and `external_refs` is a writable map on companies, contacts and deals.
 - **Relatrix API gaps this needs** (found, not assumed): no capability, vocabulary, certification or profile endpoints (planned in Phase 2, not built); the company list cannot be filtered by name or domain, only by `external_ref`; no `/search`.
 
-## 3. What crosses, and what never does
+## 3. What crosses, and what never does (revised by D-3)
 
 | Crosses | Never crosses |
 |---|---|
-| Contractor company: legal name, trade types / capabilities, status | Workers, their emails, phones, credentials, crew assignments (PII) |
-| Client org: name, created date, lifecycle milestones | A client's private notes or status on a contractor link |
-| Capability terms picked from ConTrak's catalog (as proposed facts) | Orientation content, completions, QR data, scan logs |
-| The company's published business contact (**decision D-3**) | Which client uses which contractor (one client's relationships are another's competitive data) |
+| Every company ConTrak knows, client or contractor: legal name, domain if known, trade types / capabilities | Workers: their names, emails, phones, credentials, crew assignments (PII) |
+| **Who uses whom:** a client organization → contractor company relationship, as a Relatrix relationship edge | The contractor's or client's business contact **as a Relatrix contact** (D-3: Relatrix's contacts stay Ron's own) |
+| **Where it came from:** the tag `contrak` and the company field `source = ConTrak`, set on every company ConTrak creates (D-4) | A client's private notes or status on a contractor link |
+| Client org lifecycle: a deal on "ConTrak customers" and activities on it (D-1, D-2) | Orientation content, completions, QR data, scan logs |
 
-The last row matters: Relatrix is Ron's, but ConTrak's tenant isolation is a promise to each client. A contractor company appearing in Relatrix must not reveal that it works for a particular client.
+**This reverses the earlier draft's last rule.** The first draft kept "which client uses which contractor" out of Relatrix to protect tenant isolation. Ron wants exactly that list, as the operator of the platform and the owner of the CRM. It is a deliberate platform-operator view: it never reaches another tenant, but a client should be told that Visser Solutions can see which contractors it uses. **Flag for the privacy notice and customer terms before real clients are live** (not a build blocker; a go-live one).
+
+A ConTrak company that Ron also deals with commercially is the same Relatrix company: it enters as a plain company with the flag, and he later puts it on the main pipeline himself. ConTrak never creates a deal on any pipeline but "ConTrak customers".
 
 ## 4. Design
 
@@ -40,6 +42,7 @@ The last row matters: Relatrix is Ron's, but ConTrak's tenant isolation is a pro
 - **Never blocks the user.** A ConTrak action writes its own data and one `crm_sync` row (entity, entity id, desired payload hash, status, attempts, last error) in the same transaction; an **Inngest** function drains it with backoff. A failed sync is visible, retried, and harmless.
 - **Idempotent.** Every Relatrix write carries `Idempotency-Key: contrak-<entity>-<id>-<payload hash>`; a company is found by `external_ref[contrak]=<id>` before anything is created, so a replay or a backfill cannot duplicate.
 - **Never overrides a person.** ConTrak stores the stage it last put a deal in. It moves a deal only if the deal is still there; if Ron moved it, ConTrak writes an activity instead. This is the same rule as Planitize's echo suppression, from the other side.
+- **Relationships, not contacts.** "Client org uses contractor" is a company-to-company relationship edge of a workspace-defined type (Ron creates **"Uses contractor"** in Relatrix Settings; ConTrak looks it up by key and refuses to sync, loudly, if it is missing, because the API cannot create types). One edge per link, found by `external_ref`, ended (not deleted) when the link is.
 - **Link both ways.** ConTrak keeps `relatrix_company_id` (and a deal id for customers); Relatrix keeps `external_refs.contrak` / `contrak_org`.
 - **No new dependency** (the stack is locked, CLAUDE.md §3): a small typed `fetch` client in `web/src/lib/relatrix/`, validated with the schemas ConTrak already uses, not the Relatrix package (it is private and generated).
 - **Schema changes to flag (CLAUDE.md §6):** `crm_sync` table (service-role only, RLS on, no client policy); `relatrix_company_id` on `contractor_companies`; `relatrix_company_id` and `relatrix_deal_id` on `organizations`. All additive, with Drizzle migrations.
@@ -51,13 +54,13 @@ Ordered so the unblocked work ships first and nothing waits on a repo it does no
 | # | Where | Slice | Needs | Done when |
 |---|---|---|---|---|
 | **S1** | ConTrak | Foundations: Relatrix client, `crm_sync`, Inngest drain with backoff, health check, `--dry-run`, fake-Relatrix test server | nothing | A queued sync is delivered once, retried on a 5xx, abandoned loudly on a 4xx, and a replay is a no-op. |
-| **S2** | ConTrak | **Customers pipeline:** a new client org becomes a Relatrix company + a deal on a pipeline; lifecycle milestones move or annotate it | S1; Ron's pipeline and stages (**D-1, D-2**) | Creating an org in ConTrak shows the company and deal in Relatrix; a milestone moves the deal unless Ron already did. |
-| **S3** | Relatrix | API gaps: company list filters (`name`, `domain`), capability and vocabulary endpoints with scopes, proofs, OpenAPI + client regenerated | nothing | A key with `capabilities:write` proposes a capability fact for a company; a key without it is refused. |
-| **S4** | ConTrak | **Network sync with match-before-create:** F1's "create company" first asks Relatrix by `external_ref`, then domain, then name; links instead of duplicating | S1, S3, and ConTrak **F1 landed** | Two orgs bringing in the same company converge on one Relatrix company. |
-| **S5** | ConTrak | **Capabilities:** F2's catalog terms become a ConTrak-defined vocabulary in Relatrix; company picks become proposed capability facts | S3, ConTrak **F2 landed** | A capability picked in ConTrak is waiting in Relatrix's Review with its source. |
-| **S6** | ConTrak | Backfill: existing companies and orgs, dry-run first, then real | S2, S4 | The dry run lists exactly what would be sent; the real run is resumable. |
+| **S2** | ConTrak | **Customers pipeline:** a new client org becomes a Relatrix company (tag `contrak`, source ConTrak) + a deal on **"ConTrak customers"**; Signed up → Onboarding (first site) → Live (first package published) → Adopting (first contractor invited) | S1; Ron creates the pipeline and its four stages in Relatrix | Creating an org in ConTrak shows the company and deal in Relatrix; a milestone moves the deal unless Ron already did. |
+| **S3** | Relatrix | API gaps: expose `source` and `tags` on companies (write and filter), company list filters `name` and `domain`, capability and vocabulary endpoints with scopes, proofs, OpenAPI + client regenerated; and a **Companies list filter by source/tag** so Ron can see "from ConTrak" at a glance | nothing | A key can create a company with source ConTrak and the tag; Ron's company list filters to them; a key without `capabilities:write` is refused. |
+| **S4** | ConTrak | **Network sync with match-before-create:** F1's "create company" asks Relatrix by `external_ref`, then domain, then name; links instead of duplicating; contractor companies get the tag and source; **client→contractor "uses" relationships** are synced | S1, S3, ConTrak **F1 landed**, Ron's "Uses contractor" type | Two orgs bringing in the same company converge on one Relatrix company, each with a "uses" edge. |
+| **S5** | ConTrak | **Capabilities:** F2's catalog terms become a ConTrak-defined vocabulary in Relatrix; picks become proposed capability facts | S3, ConTrak **F2 landed** | A capability picked in ConTrak is waiting in Relatrix's Review with its source. |
+| **S6** | ConTrak | Backfill: existing companies, orgs and links, dry-run first | S2, S4 | The dry run lists exactly what would be sent; the real run is resumable. |
 
-S2 before S3 on purpose: it needs only endpoints that exist. S4 and S5 wait on ConTrak's own F1 and F2 so this does not fork their work.
+S2 before S3 on purpose: it needs only endpoints that exist, **except** that the tag and source cannot be set through the API today (see S3). S2 therefore sets them with a `notes` marker and `external_refs` only, and S3 upgrades them; or S3's two small additions (`source`, `tags`) are pulled ahead of S2. **Decision for the build: pull them ahead as slice S2a in Relatrix**, so S2 ships with the real flag.
 
 ## 6. Risks and what cannot be proven from here
 
@@ -66,14 +69,16 @@ S2 before S3 on purpose: it needs only endpoints that exist. S4 and S5 wait on C
 - **Two products' shapes drift.** The fake server is generated from Relatrix's own OpenAPI document (`/api/v1/openapi.json`) so a field rename there fails ConTrak's tests, not production.
 - **Deal currency has no default in Relatrix (C8).** Customer deals are created in CAD with no value until Ron says otherwise.
 
-## 7. Decisions needed from Ron
+## 7. Decisions (recorded 2026-10-04)
 
-| # | Decision | Recommendation |
+| # | Decision | Ron's answer |
 |---|---|---|
-| **D-1** | Which Relatrix pipeline holds ConTrak customers? | A new pipeline "ConTrak customers", so it does not mix with consulting deals. |
-| **D-2** | Which ConTrak events map to which stage? | Org created → *Signed up*; first site added → *Onboarding*; first orientation package published → *Live*; first contractor invited → *Adopting*. Four stages, forward only. |
-| **D-3** | Does a contractor company's published business contact (name, email, phone) become a Relatrix contact? | **No in v1.** Company only. A person's name and email is PII ConTrak collected for orientation, and the CRM does not need it to know the company exists. Revisit once consent wording is settled. |
-| **D-4** | A contractor company's status in Relatrix | Add the tag `contrak`; do not mirror ConTrak's `status`. |
+| **D-1** | Which pipeline holds ConTrak customers | A new one, **"ConTrak customers"**. |
+| **D-2** | Which ConTrak events move a deal | Org created → *Signed up*; first site added → *Onboarding*; first orientation package published → *Live*; first contractor invited → *Adopting*. |
+| **D-3** | Does a contractor's business contact become a Relatrix contact | **No for v1** (PII ConTrak collected for orientation). Instead: a **master company list in Relatrix showing which companies use which vendors/contractors**, kept apart from Relatrix's contacts. ConTrak companies are added to the main pipeline **manually** when appropriate, and must be recognisable as ConTrak-sourced: **a `#ConTrak` flag and a `Source` field**. |
+| **D-4** | Tag contractor companies `contrak` | **Yes.** |
+
+Open, small: the exact spelling of the flag and field in Relatrix (proposed: tag `contrak`, company field Source = `ConTrak`), and the type name **"Uses contractor"**.
 
 ## 8. Not in this brief
 
