@@ -23,6 +23,8 @@ export type FailureKind =
   | 'refused'
   /** 408, 425, 429, 5xx, no answer, a dropped connection: may pass on its own. The request may have landed. */
   | 'transient'
+  /** Relatrix is reachable and the key works, but something ConTrak needs is not set up there (a pipeline, a stage). A person must set it up; resending cannot. */
+  | 'setup'
 
 export class RelatrixError extends Error {
   readonly kind: FailureKind
@@ -41,7 +43,7 @@ export class RelatrixError extends Error {
   }
 }
 
-export function classifyStatus(status: number): FailureKind {
+export function classifyStatus(status: number): Exclude<FailureKind, 'setup'> {
   if (status === 401 || status === 403) return 'auth'
   if (status === 408 || status === 425 || status === 429 || status >= 500) return 'transient'
   return 'refused'
@@ -64,12 +66,61 @@ export interface CompanyInput {
   external_refs?: Record<string, string>
 }
 
+export interface Stage {
+  id: string
+  name: string
+  position: number
+}
+
+export interface Pipeline {
+  id: string
+  name: string
+  stages: Stage[]
+}
+
+export interface Deal {
+  id: string
+  pipeline_id: string
+  stage_id: string
+  company_id: string | null
+  title: string
+  closed_at: string | null
+  external_refs: Record<string, string>
+}
+
+export interface DealInput {
+  pipeline_id: string
+  stage_id: string
+  title: string
+  currency: string
+  company_id?: string
+  external_refs?: Record<string, string>
+}
+
+export interface ActivityInput {
+  kind: 'note'
+  subject: string
+  body?: string
+  occurred_at?: string
+  company_id?: string
+  deal_id?: string
+}
+
 export interface RelatrixClient {
   /** Proves the key works and the address is Relatrix: a read that needs the least scope. */
   health(): Promise<void>
   findCompanyByExternalRef(app: string, id: string): Promise<Company | null>
   createCompany(input: CompanyInput, idempotencyKey: string): Promise<Company>
   updateCompany(id: string, patch: Partial<Omit<CompanyInput, 'domain'>>, idempotencyKey: string): Promise<Company>
+  /** A pipeline by its exact name (case-insensitive), with its stages in order; null if there is none. */
+  findPipelineByName(name: string): Promise<Pipeline | null>
+  findDealByExternalRef(app: string, id: string): Promise<Deal | null>
+  createDeal(input: DealInput, idempotencyKey: string): Promise<Deal>
+  /** Changes a deal's fields. `external_refs` REPLACES the whole map in Relatrix, so send the merged map. */
+  updateDeal(id: string, patch: { external_refs?: Record<string, string> }, idempotencyKey: string): Promise<Deal>
+  /** The only way Relatrix lets a deal's stage change. */
+  moveDeal(id: string, stageId: string, idempotencyKey: string): Promise<Deal>
+  createActivity(input: ActivityInput, idempotencyKey: string): Promise<{ id: string }>
 }
 
 interface Reply {
@@ -132,6 +183,22 @@ export function createRelatrixClient(options: RelatrixClientOptions): RelatrixCl
     }
   }
 
+  const deal = (body: unknown): Deal => {
+    const data = asObject(asObject(body)?.data)
+    if (!data || typeof data.id !== 'string' || typeof data.stage_id !== 'string') throw new RelatrixError('refused', 'That did not answer like Relatrix.', null, null, null)
+    return {
+      id: data.id,
+      pipeline_id: typeof data.pipeline_id === 'string' ? data.pipeline_id : '',
+      stage_id: data.stage_id,
+      company_id: typeof data.company_id === 'string' ? data.company_id : null,
+      title: typeof data.title === 'string' ? data.title : '',
+      closed_at: typeof data.closed_at === 'string' ? data.closed_at : null,
+      external_refs: (asObject(data.external_refs) ?? {}) as Record<string, string>,
+    }
+  }
+
+  const refQuery = (app: string, id: string) => `external_ref%5B${encodeURIComponent(app)}%5D=${encodeURIComponent(id)}`
+
   return {
     async health() {
       const r = await request('GET', '/api/v1/pipelines?limit=1')
@@ -139,7 +206,7 @@ export function createRelatrixClient(options: RelatrixClientOptions): RelatrixCl
     },
 
     async findCompanyByExternalRef(app, id) {
-      const r = await request('GET', `/api/v1/companies?external_ref%5B${encodeURIComponent(app)}%5D=${encodeURIComponent(id)}&limit=2`)
+      const r = await request('GET', `/api/v1/companies?${refQuery(app, id)}&limit=2`)
       const data = asObject(r.body)?.data
       if (!Array.isArray(data)) throw new RelatrixError('refused', 'That did not answer like Relatrix.', r.status, null, null)
       if (data.length > 1) throw new RelatrixError('refused', `More than one Relatrix company has ${app} id ${id}.`, null, 'ambiguous', null)
@@ -152,6 +219,48 @@ export function createRelatrixClient(options: RelatrixClientOptions): RelatrixCl
 
     async updateCompany(id, patch, idempotencyKey) {
       return company((await request('PATCH', `/api/v1/companies/${encodeURIComponent(id)}`, { body: patch, idempotencyKey })).body)
+    },
+
+    async findPipelineByName(name) {
+      const r = await request('GET', '/api/v1/pipelines')
+      const data = asObject(r.body)?.data
+      if (!Array.isArray(data)) throw new RelatrixError('refused', 'That did not answer like Relatrix.', r.status, null, null)
+      const found = data.map(asObject).filter((p): p is Record<string, unknown> => p !== null).filter((p) => typeof p.name === 'string' && p.name.trim().toLowerCase() === name.trim().toLowerCase())
+      if (found.length > 1) throw new RelatrixError('setup', `There is more than one pipeline called “${name}” in Relatrix.`, null, 'ambiguous', null)
+      const p = found[0]
+      if (!p || typeof p.id !== 'string') return null
+      const stages = (Array.isArray(p.stages) ? p.stages : [])
+        .map(asObject)
+        .filter((x): x is Record<string, unknown> => x !== null && typeof x.id === 'string' && typeof x.name === 'string')
+        .map((x) => ({ id: x.id as string, name: x.name as string, position: typeof x.position === 'number' ? x.position : 0 }))
+        .sort((a, b) => a.position - b.position)
+      return { id: p.id, name: p.name as string, stages }
+    },
+
+    async findDealByExternalRef(app, id) {
+      const r = await request('GET', `/api/v1/deals?${refQuery(app, id)}&limit=2`)
+      const data = asObject(r.body)?.data
+      if (!Array.isArray(data)) throw new RelatrixError('refused', 'That did not answer like Relatrix.', r.status, null, null)
+      if (data.length > 1) throw new RelatrixError('refused', `More than one Relatrix deal has ${app} id ${id}.`, null, 'ambiguous', null)
+      return data.length === 1 ? deal({ data: data[0] }) : null
+    },
+
+    async createDeal(input, idempotencyKey) {
+      return deal((await request('POST', '/api/v1/deals', { body: input, idempotencyKey })).body)
+    },
+
+    async updateDeal(id, patch, idempotencyKey) {
+      return deal((await request('PATCH', `/api/v1/deals/${encodeURIComponent(id)}`, { body: patch, idempotencyKey })).body)
+    },
+
+    async moveDeal(id, stageId, idempotencyKey) {
+      return deal((await request('POST', `/api/v1/deals/${encodeURIComponent(id)}/stage`, { body: { stage_id: stageId }, idempotencyKey })).body)
+    },
+
+    async createActivity(input, idempotencyKey) {
+      const data = asObject(asObject((await request('POST', '/api/v1/activities', { body: input, idempotencyKey })).body)?.data)
+      if (!data || typeof data.id !== 'string') throw new RelatrixError('refused', 'That did not answer like Relatrix.', null, null, null)
+      return { id: data.id }
     },
   }
 }

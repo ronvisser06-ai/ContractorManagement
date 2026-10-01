@@ -125,6 +125,7 @@ export async function drain(options: DrainOptions): Promise<DrainResult> {
         const { status, error } = failure(e)
         if (e instanceof InvalidPayload) outcome = { kind: 'abandoned', status: null, error: e.message }
         else if (e instanceof RelatrixError && e.kind === 'auth') outcome = { kind: 'blocked', delaySeconds: BLOCKED_RECHECK_SECONDS, status, error: `${error} Check the key and its scopes.` }
+        else if (e instanceof RelatrixError && e.kind === 'setup') outcome = { kind: 'blocked', delaySeconds: BLOCKED_RECHECK_SECONDS, status, error: `${error} Set it up in Relatrix and it will go through.` }
         else if (e instanceof RelatrixError && e.kind === 'refused') outcome = { kind: 'abandoned', status, error }
         else if (row.attempts >= maxAttempts) outcome = { kind: 'abandoned', status, error: `Gave up after ${row.attempts} attempts. ${error}` }
         else {

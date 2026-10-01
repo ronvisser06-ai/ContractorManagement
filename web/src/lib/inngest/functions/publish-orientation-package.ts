@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { inngest } from '../client'
 import { generationJobApprove } from '../events'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { queueOrgLifecycle } from '@/lib/relatrix/queue'
 import { newId } from '@/db/utils'
 import type { ArtifactRef, JobRecord } from '@/contracts/types'
 
@@ -97,6 +98,9 @@ export const publishOrientationPackage = inngest.createFunction(
       const { error } = await supabase.from('sites').update({ active_package_id: result.packageId }).eq('id', siteId)
       if (error) throw error
     })
+
+    // A first published package moves the customer to Live in Relatrix. queueOrgLifecycle never throws.
+    await step.run('queue-relatrix-sync', () => queueOrgLifecycle(orgId))
 
     return { packageId: result.packageId, version: result.version }
   },

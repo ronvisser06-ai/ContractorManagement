@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { newId } from '@/db/utils'
 import { sendEmail, companyInviteEmail } from '@/lib/email/send'
 import { requireActiveOrg } from '@/lib/context/server'
+import { queueOrgLifecycle } from '@/lib/relatrix/queue'
 
 export async function inviteContractorCompany(formData: FormData) {
   // Acts on the user's *active* org, with their roles in that org (F0).
@@ -81,6 +82,9 @@ export async function inviteContractorCompany(formData: FormData) {
     await admin.from('contractor_companies').delete().eq('id', companyId)
     redirect(`/app/contractors?error=${encodeURIComponent(invErr.message)}`)
   }
+
+  // A first contractor invited moves the customer to Adopting in Relatrix. Never fails the action.
+  await queueOrgLifecycle(org.id)
 
   const hdrs = await headers()
   const host = hdrs.get('host') ?? 'localhost:3000'

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { newId } from '@/db/utils'
 import { redirect } from 'next/navigation'
 import { requireActiveOrg } from '@/lib/context/server'
+import { queueOrgLifecycle } from '@/lib/relatrix/queue'
 
 export async function createSite(formData: FormData) {
   // Org comes from the caller's *active* membership (F0) — never trust a client-submitted org_id.
@@ -23,6 +24,9 @@ export async function createSite(formData: FormData) {
   if (error) {
     redirect(`/app/sites?error=${encodeURIComponent(error.message)}`)
   }
+
+  // A first site moves the customer to Onboarding in Relatrix. Never fails the action.
+  await queueOrgLifecycle(org.id)
 
   redirect('/app/sites')
 }

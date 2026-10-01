@@ -117,4 +117,4 @@ Jacques also passively flags violations of Rules 1, 2, 6, 20 — when flagged, c
 
 ---
 
-**Last Updated:** 2026-10-04 · Relatrix integration S1 (sync foundations) built, off by default — see `Relatrix-Integration-Brief.md` · 2026-09-30 · M0–M1 done; M2 Steps 1–4 done (Step 5 production wiring in progress); **M2.5 F0 shipped — F1 is next.** Production DB is Supabase project **ConTrak** (`mjmgicubneitwqyaatxp`). See BUILDLOG.md for the latest state.
+**Last Updated:** 2026-10-04 · Relatrix integration S1 (sync foundations) and S2 (customers pipeline) built, off by default — see `Relatrix-Integration-Brief.md` · 2026-09-30 · M0–M1 done; M2 Steps 1–4 done (Step 5 production wiring in progress); **M2.5 F0 shipped — F1 is next.** Production DB is Supabase project **ConTrak** (`mjmgicubneitwqyaatxp`). See BUILDLOG.md for the latest state.

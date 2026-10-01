@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { newId } from '@/db/utils'
 import { redirect } from 'next/navigation'
+import { queueOrgLifecycle } from '@/lib/relatrix/queue'
 
 export async function createOrg(formData: FormData) {
   const supabase = await createClient()
@@ -30,6 +31,9 @@ export async function createOrg(formData: FormData) {
       `/onboarding/create-org?error=${encodeURIComponent(error.message)}`,
     )
   }
+
+  // Tell Relatrix a new customer has signed up. Never fails the sign-up: queueing swallows its own errors.
+  await queueOrgLifecycle(orgId)
 
   redirect('/app')
 }

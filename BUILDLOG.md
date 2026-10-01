@@ -1266,6 +1266,25 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-10-04 — Relatrix integration S2 — customers pipeline
+
+**What I Built** (brief slice S2; still off by default):
+- A client organization now becomes a Relatrix **company** (source ConTrak, tags `contrak` and `client`, `external_refs.contrak_org`) and a **deal on the pipeline "ConTrak customers"**, titled "<org> (ConTrak)", currency CAD, no value. Stages by milestone (D-2): org created → **Signed up**, first site → **Onboarding**, first orientation package published → **Live**, first contractor (company) invited → **Adopting**. Each milestone also writes one **note** on the company and deal ("ConTrak: added its first site"), keyed by the milestone so it is never written twice.
+- **Never overrides Ron.** ConTrak remembers the stage it last set (`external_refs.contrak_stage`) and moves a deal only while the deal is still there, only forward (by the pipeline's own stage order), and never a deal Ron has closed. If he moved it, ConTrak writes its notes and leaves the stage alone. Relatrix replaces `external_refs` whole on a PATCH, so the update sends the merged map.
+- **A set-up problem is not a failure.** No pipeline called "ConTrak customers", more than one, or a missing stage blocks the sync with a plain instruction ("Set it up in Relatrix and it will go through"), checks again every 15 minutes, and creates nothing until it can create everything. New error kind `setup` in the client; the engine maps it to `blocked`.
+- **Hooks** (`web/src/lib/relatrix/queue.ts`, `queueOrgLifecycle`, called from `createOrg`, `createSite`, the company-invite action and the end of `publish-orientation-package`). The payload is **recomputed from the database each time** (earliest site, earliest published package, earliest company invitation; worker invites do not count), so queueing is idempotent and two events landing together lose nothing. It **never throws**, so a Relatrix or queue problem cannot fail a sign-up, a site, an invite or a publish.
+- Only the organization's name and four dates are sent: no person, no site name, no contractor.
+- Tests (no ConTrak database): `relatrix-customers.test.mts`, 21 tests against the extended fake Relatrix (pipelines, deals, stage moves, activities, idempotency). Total 68. 15 mutations of the new logic, every one caught (the first run missed three: the "last set by ConTrak" guard was backstopped by forward-only, the merged `external_refs`, and a replay test that did not replay).
+- Checked against the scratch Postgres through PostgREST: the real lifecycle query picks the earliest site, ignores the worker invite, counts the company invite, and a missing organization returns false without throwing.
+
+**Not verified**: nothing has talked to the real Relatrix; migration 0018 is still not applied to production; the four hooks were not driven in a browser (they are one awaited call before a redirect, and the call cannot throw).
+
+**To turn it on (Ron)**: in Relatrix create the pipeline **"ConTrak customers"** with the stages **Signed up, Onboarding, Live, Adopting** (exact names, any order is by position); the API key now needs `companies:read companies:write deals:read deals:write pipelines:read activities:write`. Then dry-run, check the recorded descriptions, go live. Existing organizations are not sent until the backfill (S6).
+
+**What's Next**: S3 (Relatrix side: capability and vocabulary endpoints, company name/domain filters) or, since S4 and S5 wait for ConTrak's own F1 and F2, a decision on whether to do S6, the backfill, first.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).
