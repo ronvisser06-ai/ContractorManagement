@@ -1,8 +1,9 @@
 // The Store backed by ConTrak's database, through the three functions in migration 0018. Service role only: the table
-// has no policy, so this uses the admin client (server-side workflows such as Inngest; never a browser).
+// has no policy, so it takes the admin (service role) client, passed in: server-side workflows such as Inngest, and the
+// backfill script. Never a browser. Imports are relative with extensions so a plain `node` script can load this file.
 
-import { createAdminClient } from '@/lib/supabase/admin'
-import { payloadHash, type Entity, type Outcome, type Store, type SyncRow } from './sync'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { payloadHash, type Entity, type Outcome, type Store, type SyncRow } from './sync.ts'
 
 const LEASE_SECONDS = 300
 
@@ -16,8 +17,7 @@ interface ClaimedRow {
   attempts: number
 }
 
-export function databaseStore(): Store {
-  const supabase = createAdminClient()
+export function databaseStore(supabase: SupabaseClient): Store {
 
   return {
     async enqueue(entity, entityId, op, payload) {

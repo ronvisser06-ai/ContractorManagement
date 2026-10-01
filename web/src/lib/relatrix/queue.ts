@@ -35,7 +35,7 @@ export async function queueOrgLifecycle(orgId: string): Promise<boolean> {
       { id: org.id as string, name: org.name as string, createdAt: org.created_at as string },
       { firstSite, firstPackage, firstContractorInvite: (invite.data?.[0]?.created_at as string | undefined) ?? null },
     )
-    const result = await databaseStore().enqueue('client_org', orgId, 'org.customer', payload)
+    const result = await databaseStore(supabase).enqueue('client_org', orgId, 'org.customer', payload)
     // Wake the drain rather than wait for the next minute. Best effort: the schedule covers a lost event.
     if (result === 'queued') await inngest.send({ name: 'crm/sync.requested', data: {} }).catch(() => undefined)
     return true

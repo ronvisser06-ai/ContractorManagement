@@ -1285,6 +1285,26 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-10-04 — Relatrix integration S6 — backfill (organizations)
+
+**What I Built** (brief slice S6, organizations only; still off by default):
+- `web/scripts/backfill-relatrix.mjs` queues every client organization that existed before the integration, through the same queue, handler and idempotency keys the live hooks use. Default run is a **plan and writes nothing**; `--queue` writes (resumable, `--limit N`, `--only`, `--skip`); `--status` shows how the queue stands and what needs attention. With the sync in `live` it refuses to queue without `--yes`.
+- `lib/relatrix/backfill.ts` (plan/apply, pure, over an injected `FactsSource`) and `backfill-source.ts` (paged read-only reads of organizations, sites, published packages and company invitations). The payload is built by the same `orgLifecyclePayload` as the live hooks, and a test pins that the hashes are equal, so a backfilled org and a hooked org are the same queue row.
+- An organization with no name or a bad date is skipped with a reason, never sent half-formed. Oldest first. Running twice queues nothing twice (the plan sees the queued hash, and the store's hash guard backstops it).
+- `store.ts` now takes the client as an argument so a plain node script can load it.
+- Tests: `relatrix-backfill.test.mts` (11, no database). Mutation-checked: dropping the limit, the date guard, the name guard and the empty `--only` fix each fail the right test; "requeue unchanged" survives on purpose, because the store's hash guard backstops it.
+- **What broke**: driving the real CLI against the scratch Postgres showed `0 organizations`: the command line's empty `--only` list was read as "only these (none)". Unit tests passed because they never passed `[]`. Fixed and pinned by a test. Also verified end to end: earliest site wins, worker invitations ignored, `--limit 2` then a second run queues the rest, a third run says all queued, live without `--yes` exits 1.
+
+**Not verified**: nothing has talked to the real Relatrix or the production ConTrak database; migration 0018 is still not applied.
+
+**Deferred**: contractor companies and client→contractor links are not backfilled; they belong to S4 (match-before-create), which waits for F1.
+
+**To run it (Ron)**: after migration 0018 and the Relatrix setup, with sync in `dry-run`: `node --env-file=.env.local scripts/backfill-relatrix.mjs`, read the plan, then `--queue`, read `--status` once the drain has run, then switch to `live`.
+
+**What's Next**: S3 (Relatrix side: capability and vocabulary endpoints, company name/domain filters).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).
