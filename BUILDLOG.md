@@ -1305,6 +1305,14 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-10-05 — Relatrix integration S3 (built in RelatrixCRM)
+
+Nothing changed in this repository's code. Relatrix gained what S4 and S5 call: company `name` / `domain` filters for match-before-create, and a `capabilities` scope group (vocabularies, terms, proposing a capability for Review; a client never writes one). Details: RelatrixCRM `BUILD.md` §6.5 and this brief's S3 note. Not applied to the hosted Relatrix.
+
+**What's Next**: S4 and S5 wait on ConTrak's own F1 (org-defined companies) and F2 (capability catalog). Until then, Ron-owned go-live of S1–S3 and S6 (orgs).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).
