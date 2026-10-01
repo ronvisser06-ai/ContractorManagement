@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { safeNextPath } from '@/lib/http/safe-next'
 
 export async function middleware(request: NextRequest) {
   // Start with a passthrough response so cookies can be mutated on it.
@@ -52,11 +53,10 @@ export async function middleware(request: NextRequest) {
     (request.nextUrl.pathname === '/login' ||
       request.nextUrl.pathname === '/register')
   ) {
-    // Send to the landing router, which picks the right portal (F0).
-    const homeUrl = request.nextUrl.clone()
-    homeUrl.pathname = '/'
-    homeUrl.search = ''
-    return NextResponse.redirect(homeUrl)
+    // Honour a safe ?next= (e.g. back to an invitation); else the landing
+    // router, which picks the right portal (F0).
+    const next = safeNextPath(request.nextUrl.searchParams.get('next'))
+    return NextResponse.redirect(new URL(next ?? '/', request.url))
   }
 
   return supabaseResponse

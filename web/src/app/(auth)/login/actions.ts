@@ -2,9 +2,11 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { safeNextPath } from '@/lib/http/safe-next'
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
+  const next = safeNextPath(formData.get('next'))
 
   const { error } = await supabase.auth.signInWithPassword({
     email: formData.get('email') as string,
@@ -12,11 +14,13 @@ export async function login(formData: FormData) {
   })
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`)
+    const qs = new URLSearchParams({ error: error.message })
+    if (next) qs.set('next', next)
+    redirect(`/login?${qs.toString()}`)
   }
 
-  // The landing router at `/` picks the right portal (or the chooser).
-  redirect('/')
+  // Back to where they came from (e.g. an invitation), else the landing router.
+  redirect(next ?? '/')
 }
 
 export async function logout() {

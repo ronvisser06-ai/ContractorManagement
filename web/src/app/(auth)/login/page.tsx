@@ -3,13 +3,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { login } from './actions'
+import { safeNextPath } from '@/lib/http/safe-next'
 
 interface Props {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; next?: string }>
 }
 
 export default async function LoginPage({ searchParams }: Props) {
-  const { error } = await searchParams
+  const { error, next: rawNext } = await searchParams
+  const next = safeNextPath(rawNext)
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -31,6 +33,7 @@ export default async function LoginPage({ searchParams }: Props) {
         )}
 
         <form action={login} className="space-y-4">
+          {next && <input type="hidden" name="next" value={next} />}
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input

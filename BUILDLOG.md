@@ -1344,6 +1344,37 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-10-01 — F1 Step 3 — Accepting an admin invitation (`/invite/company`)
+
+**What I Built**:
+- Migration `0019_company_invite_page.sql`: `get_company_invitation(token)` — SECURITY DEFINER read for the page (callable signed out; holding the 64-hex token is the capability): company + org names, admin type, invited email, status, expired. No ids, no token. **Drops `accept_company_invite`** (M1; took a user id).
+- `src/app/invite/company/` — page + actions:
+  - **Signed in, email matches** (primary or verified) → "Accept and open <company>" → `accept_company_admin_invite` → sets `ctx_company` (F0) → `/company`.
+  - **Signed in as someone else** → mismatch message + "Sign out and use <invited email>" → `/login?next=<invite>`.
+  - **Signed out** → "Sign in" (returns here via `next`) or **"Create account and accept"**: the account is always created for the invited address (read from the invitation, never the form); if email confirmation were on → "confirm, then open the link again".
+  - Used / unknown / expired / replaced links → clear messages (expired asks the org for a new one).
+- `lib/http/safe-next.ts` — `safeNextPath` (same-site paths only; rejects `//host`, `/\`, schemes, control chars) used by the **login action, login page and middleware**; `invitePath(token)`.
+- Accept error codes added to `labels.ts`.
+- **Retired**: `src/app/(auth)/register/company/*` and `accept-company-invite.test.mts`.
+
+**Verified**:
+- `company-invite-page.test.mts` **6/6** (safeNextPath; anon read returns display data only; unknown/malformed tokens → nothing; replaced → revoked, old date → expired; old RPC gone).
+- HTTP, production build, ConTrak Dev — **18/18 on substance**: (A) in-house org user signed in accepts → lands in the company as Contractor Admin, `admin_type = client_staff`; (B) wrong account → mismatch, switch → `/login?next=…`; (C) signed-out existing user → real login form with `next` → back → accept; (D) brand-new person → account for the invited email → lands in the company (third party); (E) used / unknown / expired links; (F) forged `//evil` next → `/`. (The one red check searched the whole page for "evil.example" — it appears only in Next's serialized URL, not in the form; the form has no `next` field.)
+- Browser: signed-out invite page at desktop + 375px (throwaway invitation, removed).
+- Full suite **142/142** on ConTrak Dev; tsc, lint, build clean.
+
+**What Went Wrong**:
+- tsc failed on stale generated route types (`.next/dev/types`) still pointing at the deleted `/register/company` page → cleared `.next/dev`, rebuilt.
+- Visual-check script: env var placed after the command → details not saved; looked the rows up by their unique email and removed them.
+
+**Logged for F8**: `invitations: read if creator or involved` lets *any* member of the org/company read its invitations **including tokens**. Harmless for admin invites (email must match) — check the worker-invite claim path for the same property.
+
+**Production**: needs `0019` (`get_company_invitation`) — without it the deployed invite page shows "not found".
+
+**What's Next**: apply 0019 to production → F1 Step 4 (company side: link-request inbox + Admins page).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

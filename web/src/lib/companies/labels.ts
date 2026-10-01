@@ -53,6 +53,13 @@ const RPC_ERROR_MESSAGES: Record<string, string> = {
   already_linked: 'You are already linked to this company.',
   not_creator: 'Only the organization that created this company can change its admin nomination.',
   company_has_admin: 'This company already has an admin — its admins now manage admins.',
+  // accept_company_admin_invite (F1 Step 3)
+  not_authenticated: 'Please sign in to accept this invitation.',
+  invalid_token: 'This invitation link is not valid.',
+  already_used: 'This invitation has already been used.',
+  expired: 'This invitation has expired — ask for a new one.',
+  email_mismatch: 'This invitation was sent to a different email address. Sign in with that address to accept it.',
+  invalid_invitation: 'This invitation is no longer valid — ask for a new one.',
 }
 
 export function companyErrorMessage(raw: string | null | undefined): string {
