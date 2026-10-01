@@ -25,7 +25,12 @@ const field = (formData: FormData, name: string) => ((formData.get(name) as stri
 // (no Resend key, or Resend refused the recipient), callers show the link.
 async function deliverAdminInvite(opts: { to: string; token: string; companyName: string; orgName: string }) {
   const link = `${await baseUrl()}/invite/company?token=${opts.token}`
-  const { html, text } = companyAdminInviteEmail({ link, companyName: opts.companyName, orgName: opts.orgName })
+  const { html, text } = companyAdminInviteEmail({
+    link,
+    companyName: opts.companyName,
+    invitedBy: opts.orgName,
+    kind: 'org_nomination',
+  })
   const result = await sendEmail({
     to: opts.to,
     subject: `You've been nominated as administrator of ${opts.companyName}`,

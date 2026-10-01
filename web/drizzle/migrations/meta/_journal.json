@@ -141,6 +141,13 @@
       "when": 1783364400000,
       "tag": "0019_company_invite_page",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783450800000,
+      "tag": "0020_company_client_links",
+      "breakpoints": true
     }
   ]
 }

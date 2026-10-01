@@ -60,6 +60,10 @@ const RPC_ERROR_MESSAGES: Record<string, string> = {
   expired: 'This invitation has expired — ask for a new one.',
   email_mismatch: 'This invitation was sent to a different email address. Sign in with that address to accept it.',
   invalid_invitation: 'This invitation is no longer valid — ask for a new one.',
+  // Company side (F1 Step 4)
+  not_company_admin: 'Only an admin of this company can do that.',
+  not_pending: 'This request has already been answered.',
+  last_admin: 'A company must keep at least one admin — invite another admin before removing this one.',
 }
 
 export function companyErrorMessage(raw: string | null | undefined): string {

@@ -1375,6 +1375,32 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-10-01 — F1 Step 4 — Company side: Clients inbox + Admins page
+
+**What I Built**:
+- Migration `0020_company_client_links.sql`: `company_client_links(company_id)` — for the company's **admins only**, every client link with the org's **name** and status (RLS on organizations hides org names from contractors); anyone else gets an empty list.
+- **`/company/clients`** — "Link requests" with **Accept / Decline** (`respond_to_link_request`), "Your clients" with Linked / Declined / Suspended; confirmation explains the client can now see the company and its workers.
+- **`/company/admins`** — current admins (name, email, admin type, "(you)"), **Remove / Step down** (disabled when only one admin; the RPC refuses the last admin regardless), **Invite an admin** (email + admin type → `invite_company_admin` → email, or link on screen when Resend refuses), **pending admin invitations** with link + **Revoke** (direct update under RLS).
+- Contractor-portal menu: **Clients** and **Admins** for Contractor Admins (in the active company).
+- `companyAdminInviteEmail` now takes `invitedBy` + `kind` (org nomination vs. admin invite); Step 2 caller updated. Shared `lib/http/base-url.ts`. New error codes (`not_company_admin`, `not_pending`, `last_admin`) in `labels.ts`.
+
+**Verified**:
+- `company-clients.test.mts` **3/3** (admin sees all links with org names, requests first; worker / other company's admin / the asking org see nothing; only the company's admin can revoke its invitation). Labels test extended to every F1 code.
+- HTTP, production build, ConTrak Dev (demo admin of Apex + script client orgs): menu entries; two requests listed by org name; asking org sees nothing until **Accept**, then sees Apex; **Decline** → `declined`, still nothing; invite a third-party admin → link fallback → pending list → new person signs up via `/invite/company` (company-issued wording) → listed → removed → membership disabled; forced last-admin removal refused with a clear message; revoke clears the invitation; as a worker in Birch no Clients/Admins and both pages redirect.
+- Button state re-checked on the real `disabled` attribute: 1 admin → "Step down" disabled; 2 admins → both enabled.
+- Browser (Ron signed in, Claude drove): Clients with a pending request, **Accept clicked in the browser**, Admins page; desktop + 375px.
+- Full suite **145/145** on ConTrak Dev; tsc, lint, build clean.
+
+**What Went Wrong** (verification script, not the app):
+- Checked "disabled" anywhere in the button HTML — Tailwind's `disabled:` classes always match, so the first pass of that check proved nothing. Re-done on the attribute.
+- Compared a redirect URL with spaces against one encoded with `+`; an inline script broke on an apostrophe (moved to a file).
+
+**Production**: needs `0020` (`company_client_links`) — without it the deployed Clients page lists nothing.
+
+**What's Next**: apply 0020 to production → F1 Step 5 (end-to-end verification with F1 personas + ship check).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

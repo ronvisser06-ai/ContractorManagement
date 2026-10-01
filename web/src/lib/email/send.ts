@@ -30,17 +30,24 @@ export async function sendEmail(opts: {
   return { sent: true }
 }
 
+// Company-admin invitation. `invitedBy` is the client org that set the company
+// up (first admin, F1 Step 2) or the admin who invited them (F1 Step 4).
 export function companyAdminInviteEmail(opts: {
   link: string
   companyName: string
-  orgName: string
+  invitedBy: string
+  kind: 'org_nomination' | 'admin_invite'
 }): { html: string; text: string } {
   const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!)
+  const lead =
+    opts.kind === 'org_nomination'
+      ? (by: string, co: string) => `${by} has set up ${co} on the Contractor Orientation platform and nominated you as its administrator.`
+      : (by: string, co: string) => `${by} has invited you to be an administrator of ${co} on the Contractor Orientation platform.`
   return {
-    html: `<p>${esc(opts.orgName)} has set up <strong>${esc(opts.companyName)}</strong> on the Contractor Orientation platform and nominated you as its administrator.</p>
+    html: `<p>${lead(esc(opts.invitedBy), `<strong>${esc(opts.companyName)}</strong>`)}</p>
 <p><a href="${opts.link}">Accept and open ${esc(opts.companyName)}</a></p>
 <p>This link expires in 7 days and only works for this email address. If you weren't expecting this, you can ignore it.</p>`,
-    text: `${opts.orgName} has set up ${opts.companyName} on the Contractor Orientation platform and nominated you as its administrator.\n\nAccept: ${opts.link}\n\nThis link expires in 7 days and only works for this email address.`,
+    text: `${lead(opts.invitedBy, opts.companyName)}\n\nAccept: ${opts.link}\n\nThis link expires in 7 days and only works for this email address.`,
   }
 }
 

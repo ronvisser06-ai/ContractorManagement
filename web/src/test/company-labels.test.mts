@@ -20,9 +20,12 @@ describe('companyErrorMessage', () => {
       'not_client_admin', 'name_required', 'admin_email_required', 'admin_type_required',
       'duplicate_business_number', 'possible_duplicate', 'company_not_found', 'already_linked',
       'not_creator', 'company_has_admin',
+      'not_authenticated', 'invalid_token', 'already_used', 'expired', 'email_mismatch', 'invalid_invitation',
+      'not_company_admin', 'not_pending', 'last_admin',
     ]) {
       const msg = companyErrorMessage(code)
-      assert.ok(msg.length > 10 && !msg.includes(code), `${code} → ${msg}`)
+      // Friendly text, never a snake_case code ("expired" alone is a normal word).
+      assert.ok(msg.length > 10 && !/[a-z]+_[a-z_]+/.test(msg) && msg !== companyErrorMessage('???'), `${code} → ${msg}`)
     }
   })
 
