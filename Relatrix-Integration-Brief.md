@@ -53,7 +53,7 @@ Ordered so the unblocked work ships first and nothing waits on a repo it does no
 
 | # | Where | Slice | Needs | Done when |
 |---|---|---|---|---|
-| **S1** | ConTrak | Foundations: Relatrix client, `crm_sync`, Inngest drain with backoff, health check, `--dry-run`, fake-Relatrix test server | nothing | A queued sync is delivered once, retried on a 5xx, abandoned loudly on a 4xx, and a replay is a no-op. |
+| **S1** ✅ | ConTrak | Foundations: Relatrix client, `crm_sync`, Inngest drain with backoff, health check, `--dry-run`, fake-Relatrix test server | nothing | A queued sync is delivered once, retried on a 5xx, abandoned loudly on a 4xx, and a replay is a no-op. |
 | **S2** | ConTrak | **Customers pipeline:** a new client org becomes a Relatrix company (tag `contrak`, source ConTrak) + a deal on **"ConTrak customers"**; Signed up → Onboarding (first site) → Live (first package published) → Adopting (first contractor invited) | S1; Ron creates the pipeline and its four stages in Relatrix | Creating an org in ConTrak shows the company and deal in Relatrix; a milestone moves the deal unless Ron already did. |
 | **S3** | Relatrix | API gaps: expose `source` and `tags` on companies (write and filter), company list filters `name` and `domain`, capability and vocabulary endpoints with scopes, proofs, OpenAPI + client regenerated; and a **Companies list filter by source/tag** so Ron can see "from ConTrak" at a glance | nothing | A key can create a company with source ConTrak and the tag; Ron's company list filters to them; a key without `capabilities:write` is refused. |
 | **S4** | ConTrak | **Network sync with match-before-create:** F1's "create company" asks Relatrix by `external_ref`, then domain, then name; links instead of duplicating; contractor companies get the tag and source; **client→contractor "uses" relationships** are synced | S1, S3, ConTrak **F1 landed**, Ron's "Uses contractor" type | Two orgs bringing in the same company converge on one Relatrix company, each with a "uses" edge. |
@@ -83,3 +83,5 @@ Open, small: the exact spelling of the flag and field in Relatrix (proposed: tag
 ## 8. Not in this brief
 
 Inbound sync from Relatrix; per-client Relatrix connections (decided against: one workspace); workers, credentials and orientation records in Relatrix; Casa Cabana and FriendSay.
+
+**S1 built (2026-10-04, BUILDLOG):** `web/src/lib/relatrix/`, migration `0018_crm_sync.sql`, the `drain-crm-sync` Inngest function and `/api/health/relatrix`. Off by default; nothing queues a sync until S2/S4. Migration not yet applied to production.

@@ -384,3 +384,30 @@ export const invitations = pgTable('invitations', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   acceptedAt: timestamp('accepted_at', { withTimezone: true }),
 })
+
+// Outbound sync queue to Relatrix CRM (Relatrix-Integration-Brief.md, slice S1). SERVICE ROLE ONLY: RLS is on with no
+// policy and every privilege is revoked from anon and authenticated (migration 0018). Company-level payloads only —
+// never a worker, a contact or a credential. Read and written through the enqueue/claim/finish functions.
+export const crmSync = pgTable(
+  'crm_sync',
+  {
+    id: text('id').primaryKey(), // crm_<uuid>
+    entity: text('entity').notNull(), // contractor_company | client_org | client_company_link
+    entityId: text('entity_id').notNull(),
+    op: text('op').notNull(),
+    payload: jsonb('payload').notNull(),
+    payloadHash: text('payload_hash').notNull(),
+    status: text('status').notNull().default('pending'), // pending | delivering | delivered | blocked | abandoned | dry_run
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    leaseUntil: timestamp('lease_until', { withTimezone: true }),
+    lastError: text('last_error'),
+    lastStatus: integer('last_status'),
+    deliveredHash: text('delivered_hash'),
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    remoteId: text('remote_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.entity, t.entityId, t.op)],
+)

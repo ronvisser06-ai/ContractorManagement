@@ -18,3 +18,9 @@ export const generationJobApprove = eventType('generation/job.approve', {
     requalificationPolicy: RequalificationPolicy
   }>(),
 })
+
+// Emitted after a sync is queued, to wake the drain without waiting for the next minute. Optional: the drain also
+// runs on a schedule, so a lost event only costs a minute.
+export const crmSyncRequested = eventType('crm/sync.requested', {
+  schema: staticSchema<Record<string, never>>(),
+})

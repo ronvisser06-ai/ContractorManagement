@@ -1246,6 +1246,24 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 **What's Next**: separate dev/test Supabase project → expected-on-site fix + page-query test → F1 (fresh conversation, Rule 18).
 
+### 2026-10-04 — Relatrix integration S1 — sync foundations
+
+**What I Built** (brief: `Relatrix-Integration-Brief.md`, slice S1; nothing user-facing, nothing on by default):
+- `web/src/lib/relatrix/` — `config.ts` (RELATRIX_SYNC_MODE `off` | `dry-run` | `live`, default **off**; https-only bare origin; a live key must look like `rlx_` + 64 hex), `client.ts` (typed `fetch` client, no new dependency: bearer key to one origin, **redirects refused**, timeout, `Idempotency-Key` on every write, errors classified `auth` / `refused` / `transient`, never containing the key, the address or the underlying error), `sync.ts` (the engine: payload hash, idempotency key, backoff 30 s → 1 h, 8 attempts then abandon, `blocked` for a bad key/scope that does not use attempts, dry run), `ops.ts` (`company.upsert`: find by `external_refs.contrak`, create or update, flagged `source = contrak` + tag `contrak`; adds tags and never removes what a person set), `store.ts` (the database-backed Store), `constants.ts`.
+- Migration `0018_crm_sync.sql` + Drizzle `crmSync`: the queue table (RLS on, **no policy**, every privilege revoked from anon/authenticated) and three `service_role`-only functions, `enqueue_crm_sync`, `claim_crm_sync` (`FOR UPDATE SKIP LOCKED`, leases, a dead worker's row is re-taken), `finish_crm_sync` (an outcome for an old wanted state cannot mark the new one delivered).
+- Inngest `drain-crm-sync` (every minute and on `crm/sync.requested`, one at a time; claims nothing when the mode is off) and `GET /api/health/relatrix` (configured? key works? says nothing about the key or address).
+- Tests with **no ConTrak database**: `relatrix-config`, `relatrix-client`, `relatrix-sync` (47 tests) against a fake Relatrix over real HTTP (`src/test/support/fake-relatrix.mts`, which behaves like the real API: bearer auth, `external_ref` filter, tag tidying, idempotency replays, a 409 on a duplicate name). Every guard was removed in turn and a test failed (20 mutations; two weak tests were found and fixed this way).
+- `web/scripts/check-crm-sync-sql.mjs` — 15 checks of the migration's functions and who may reach them, against a **scratch Postgres on localhost** (it refuses anything else). 15 SQL mutations, each caught.
+
+**What Went Wrong**:
+- The first SQL check let a missing REVOKE hide: `CREATE OR REPLACE FUNCTION` keeps a function's old grants, so the script now drops the functions first. Two other tests passed for the wrong reason (a status reset in `enqueue` backstopped the hash guard in `finish`; a two-row ordering test could not tell `next_attempt_at` from `created_at`); rewritten until the right test failed.
+
+**Not verified**: nothing has talked to the real Relatrix (it is not live yet; `RelatrixCRM/docs/go-live.md`), and migration 0018 has **not been applied to ConTrak's production database**. The store was driven through PostgREST against the scratch database (dry run, delivery, no repeat, a 503 retry). The Inngest function itself was not run under an Inngest server; it is a thin wrapper around `drain`.
+
+**To turn it on (Ron)**: apply 0018 (`npm run db:migrate`); set `RELATRIX_BASE_URL`, `RELATRIX_API_KEY` (a key with `companies:read companies:write`, made in Relatrix → Settings → API keys) and `RELATRIX_SYNC_MODE=dry-run` in Vercel, check `/api/health/relatrix`, then `live`. Nothing queues a sync yet: S2 (customers pipeline) and S4 (contractor network) are what call `enqueue`.
+
+**What's Next**: S2 — a new client org becomes a Relatrix company + a deal on "ConTrak customers" (needs Ron to create that pipeline and its four stages in Relatrix, and ConTrak's lifecycle hooks: org created, first site, first package published, first contractor invited).
+
 ---
 
 ## Track Progress
