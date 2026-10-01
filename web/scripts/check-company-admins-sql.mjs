@@ -243,6 +243,74 @@ await check('anon cannot call any of it, and the helper is not callable by a sig
   await rejects(tx, () => as(tx, w.adminA, () => tx`select assert_client_admin('org_1')`), /permission denied/)
 })
 
+// A company with one admin (companyUser), defined by org_1, for the company-side checks.
+const withAdmin = async (tx, w) => {
+  const [r] = await as(tx, w.adminA, () => define(tx, 'org_1', 'Apex'))
+  await tx`insert into company_memberships (id, user_id, company_id, roles, admin_type, nominated_by_org_id, status) values ('cm_ca', ${w.companyUser}, ${r.company_id}, ${['contractor_admin']}::company_role[], 'in_house', 'org_1', 'active')`
+  return r.company_id
+}
+
+await check('a company’s admins see its admins and pending invitations; no one else does', async (tx, w) => {
+  const co = await withAdmin(tx, w)
+  await as(tx, w.companyUser, () => tx`select add_company_admin(${co}, 'third_party', 'inv_ta', 'Safety@Consult.test', ${tok()})`)
+  const rows = await as(tx, w.companyUser, () => tx`select * from list_company_admins(${co})`)
+  assert.equal(rows.length, 2)
+  const adm = rows.find((r) => !r.pending), inv = rows.find((r) => r.pending)
+  assert.deepEqual([adm.membership_id, adm.admin_type, adm.nominated_by, adm.name], ['cm_ca', 'in_house', 'Client One', 'companyUser T'])
+  assert.deepEqual([inv.invitation_id, inv.admin_type, inv.email, inv.nominated_by], ['inv_ta', 'third_party', 'Safety@Consult.test', null])
+  for (const u of [w.adminA, w.outsider, w.adminB, w.staffA]) await rejects(tx, () => as(tx, u, () => tx`select * from list_company_admins(${co})`), /Only an admin of this company/)
+  // A disabled membership is not an admin, whatever roles it still lists.
+  await tx`insert into company_memberships (id, user_id, company_id, roles, admin_type, status) values ('cm_off', ${w.staffA}, ${co}, ${['contractor_admin']}::company_role[], 'external', 'disabled')`
+  assert.equal((await as(tx, w.companyUser, () => tx`select * from list_company_admins(${co})`)).some((r) => r.membership_id === 'cm_off'), false)
+  // Expired, accepted and revoked invitations are not "pending".
+  await tx`update invitations set expires_at = now() - interval '1 day' where id = 'inv_ta'`
+  assert.equal((await as(tx, w.companyUser, () => tx`select * from list_company_admins(${co})`)).filter((r) => r.pending).length, 0)
+})
+
+await check('a company admin invites another admin by email; in-house is the org’s to nominate', async (tx, w) => {
+  const co = await withAdmin(tx, w)
+  assert.equal((await as(tx, w.companyUser, () => tx`select add_company_admin(${co}, 'external', 'inv_1', ' New@Person.test ', ${tok()}) as t`))[0].t, tok())
+  const inv = (await tx`select org_id, admin_type, created_by, intended_roles, status from invitations where id = 'inv_1'`)[0]
+  assert.deepEqual([inv.org_id, inv.admin_type, inv.created_by, inv.intended_roles, inv.status], [null, 'external', w.companyUser, ['contractor_admin'], 'pending'])
+  await rejects(tx, () => as(tx, w.companyUser, () => tx`select add_company_admin(${co}, 'external', 'inv_2', 'new@person.test', ${'b'.repeat(64)})`), /pending invite already exists/)
+  await rejects(tx, () => as(tx, w.companyUser, () => tx`select add_company_admin(${co}, 'in_house', 'inv_3', 'x@y.test', ${'c'.repeat(64)})`), /nominated by the client/)
+  await rejects(tx, () => as(tx, w.companyUser, () => tx`select add_company_admin(${co}, 'external', 'inv_4', '', ${'d'.repeat(64)})`), /email address is required/)
+  await rejects(tx, () => as(tx, w.companyUser, () => tx`select add_company_admin(${co}, 'external', 'inv_5', 'a@b.test', 'short')`), /token is required/)
+  for (const u of [w.adminA, w.outsider, w.staffA]) await rejects(tx, () => as(tx, u, () => tx`select add_company_admin(${co}, 'external', 'inv_9', 'z@z.test', ${'e'.repeat(64)})`), /Only an admin of this company/)
+  // The invitee can accept it, and it records no nominating org.
+  await tx`select accept_company_invite(${tok()}, ${w.staffA}, 'cm_new', 'Ignored')`
+  const m = (await tx`select admin_type, nominated_by_org_id, status from company_memberships where id = 'cm_new'`)[0]
+  assert.deepEqual([m.admin_type, m.nominated_by_org_id, m.status], ['external', null, 'active'])
+})
+
+await check('a pending invitation can be revoked by the company’s admins only, and then cannot be accepted', async (tx, w) => {
+  const co = await withAdmin(tx, w)
+  await as(tx, w.companyUser, () => tx`select add_company_admin(${co}, 'external', 'inv_r', 'r@r.test', ${tok()})`)
+  for (const u of [w.adminA, w.outsider]) await rejects(tx, () => as(tx, u, () => tx`select revoke_company_admin_invite('inv_r')`), /Only an admin of this company/)
+  await as(tx, w.companyUser, () => tx`select revoke_company_admin_invite('inv_r')`)
+  assert.equal((await tx`select status from invitations where id = 'inv_r'`)[0].status, 'revoked')
+  await rejects(tx, () => as(tx, w.companyUser, () => tx`select revoke_company_admin_invite('inv_r')`), /No such pending invitation/)
+  await rejects(tx, () => tx`select accept_company_invite(${tok()}, ${w.staffA}, 'cm_x', 'x')`, /already been used or revoked/)
+})
+
+await check('pending link requests are listed for the company’s admins, by org name, until answered', async (tx, w) => {
+  const co = await withAdmin(tx, w)
+  await as(tx, w.adminB, () => define(tx, 'org_2', 'Apex', { linkExisting: co, link: 'ccl_b' }))
+  const rows = await as(tx, w.companyUser, () => tx`select * from list_pending_company_links(${co})`)
+  assert.deepEqual(rows.map((r) => [r.link_id, r.org_name]), [['ccl_b', 'Client Two']])
+  for (const u of [w.adminB, w.outsider]) await rejects(tx, () => as(tx, u, () => tx`select * from list_pending_company_links(${co})`), /Only an admin of this company/)
+  await as(tx, w.companyUser, () => tx`select respond_to_company_link('ccl_b', true)`)
+  assert.equal((await as(tx, w.companyUser, () => tx`select * from list_pending_company_links(${co})`)).length, 0)
+})
+
+await check('anon cannot call the company-side functions, and the helper is not callable by a signed-in user', async (tx, w) => {
+  await tx`set local role anon`
+  for (const q of [`list_company_admins('x')`, `list_pending_company_links('x')`, `add_company_admin('x','external','i','a@b.test','${'f'.repeat(64)}')`, `revoke_company_admin_invite('x')`])
+    await rejects(tx, () => tx.unsafe(`select * from ${q}`), /permission denied/)
+  await tx`reset role`
+  await rejects(tx, () => as(tx, w.adminA, () => tx`select assert_company_admin('x')`), /permission denied/)
+})
+
 const failed = results.filter(([ok]) => !ok)
 for (const [ok, name] of results) console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`)
 console.log(`\n${results.length - failed.length}/${results.length} passed`)

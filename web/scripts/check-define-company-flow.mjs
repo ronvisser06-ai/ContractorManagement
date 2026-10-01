@@ -11,6 +11,7 @@ import { createHmac } from 'node:crypto'
 import postgres from 'postgres'
 import { createClient } from '@supabase/supabase-js'
 import { defineCompany, parseDefineForm } from '../src/lib/companies/define.ts'
+import { addCompanyAdmin } from '../src/lib/companies/admins.ts'
 
 const { SCRATCH_DATABASE_URL: dbUrl, SCRATCH_API_URL: api, SCRATCH_JWT_SECRET: secret } = process.env
 if (!dbUrl || !api || !secret) throw new Error('Set SCRATCH_DATABASE_URL, SCRATCH_API_URL and SCRATCH_JWT_SECRET.')
@@ -132,6 +133,26 @@ await check('only a Client Admin: staff and strangers are refused with the datab
     assert.equal(r.kind, 'invalid'); assert.match(r.error, /Only a Client Admin/)
   }
   assert.equal((await sql`select count(*)::int as n from contractor_companies where legal_name like ${`Nope ${tag}%`}`)[0].n, 0)
+})
+
+await check('a company admin invites another admin: the invitation carries the type, the mail goes, and bad input is refused', async () => {
+  const boss = await user('companyBoss')
+  await sql`insert into company_memberships (id, user_id, company_id, roles, admin_type, status) values (${`mem_boss_${tag}`}, ${boss}, ${created}, ${['contractor_admin']}::company_role[], 'external', 'active')`
+  const d = (ok = true, who = boss) => ({ supabase: asUser(who), company: { id: created, name: 'Apex & Sons' }, send: send(ok), origin: 'https://app.example' })
+  const r = await addCompanyAdmin(d(), { type: 'third_party', email: ' Consultant@Safety.test ' })
+  assert.deepEqual([r.kind, r.invite], ['invited', null])
+  const [inv] = await sql`select admin_type, email, org_id, created_by, status from invitations where company_id = ${created} and email = 'consultant@safety.test'`
+  assert.deepEqual([inv.admin_type, inv.org_id, inv.created_by, inv.status], ['third_party', null, boss, 'pending'])
+  assert.equal(mails.length, 1); assert.match(mails[0].text, /register\/company\?token=[0-9a-f]{64}/); assert.doesNotMatch(mails[0].html, /&amp;amp;|<strong>Apex &/)
+  const dev = await addCompanyAdmin(d(false), { type: 'external', email: 'dev@person.test' })
+  assert.match(dev.invite.token, /^[0-9a-f]{64}$/)
+  for (const [input, text] of [[{ type: 'in_house', email: 'a@b.test' }, /Choose who/], [{ type: 'external', email: 'nope' }, /email address/]]) {
+    const bad = await addCompanyAdmin(d(), input); assert.equal(bad.kind, 'invalid'); assert.match(bad.error, text)
+  }
+  const dup = await addCompanyAdmin(d(), { type: 'external', email: 'dev@person.test' })
+  assert.equal(dup.kind, 'invalid'); assert.match(dup.error, /pending invite already exists/)
+  const nope = await addCompanyAdmin(d(true, outsider), { type: 'external', email: 'x@y.test' })
+  assert.equal(nope.kind, 'invalid'); assert.match(nope.error, /Only an admin of this company/)
 })
 
 const failed = results.filter(([ok]) => !ok)

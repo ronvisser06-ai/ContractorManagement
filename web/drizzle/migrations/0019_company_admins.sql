@@ -198,6 +198,81 @@ BEGIN
   END IF;
 END $$;
 
+-- ── the company's own side: see and manage its admins and link requests ───────
+CREATE OR REPLACE FUNCTION assert_company_admin(p_company text) RETURNS void
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF auth.uid() IS NULL OR p_company NOT IN (SELECT user_admin_company_ids(auth.uid())) THEN
+    RAISE EXCEPTION 'Only an admin of this company can do that';
+  END IF;
+END $$;
+REVOKE ALL ON FUNCTION assert_company_admin(text) FROM PUBLIC, anon, authenticated;
+
+-- Admins and pending admin invitations in one list. Names and emails are the company's own people's, shown to its admins.
+CREATE OR REPLACE FUNCTION list_company_admins(p_company text)
+RETURNS TABLE (membership_id text, invitation_id text, name text, email text, admin_type company_admin_type,
+               nominated_by text, pending boolean, since timestamptz)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  PERFORM assert_company_admin(p_company);
+  RETURN QUERY
+    SELECT m.id, NULL::text, trim(u.given_name || ' ' || u.family_name), u.primary_email::text, m.admin_type,
+           (SELECT o.name FROM organizations o WHERE o.id = m.nominated_by_org_id), false, m.created_at
+    FROM company_memberships m JOIN users u ON u.id = m.user_id
+    WHERE m.company_id = p_company AND m.status = 'active' AND 'contractor_admin' = ANY(m.roles)
+    UNION ALL
+    SELECT NULL::text, i.id, NULL::text, i.email::text, i.admin_type,
+           (SELECT o.name FROM organizations o WHERE o.id = i.org_id), true, i.created_at
+    FROM invitations i
+    WHERE i.company_id = p_company AND i.type = 'company' AND i.status = 'pending' AND i.expires_at > now()
+    ORDER BY 8;
+END $$;
+
+-- A company's admins can invite another admin: an external or third-party person, by email.
+CREATE OR REPLACE FUNCTION add_company_admin(p_company text, p_type company_admin_type, p_id text, p_email text, p_token text)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_email citext := nullif(trim(coalesce(p_email, '')), '')::citext;
+BEGIN
+  PERFORM assert_company_admin(p_company);
+  IF p_type = 'in_house' THEN RAISE EXCEPTION 'In-house admins are nominated by the client organization'; END IF;
+  IF v_email IS NULL THEN RAISE EXCEPTION 'An email address is required'; END IF;
+  IF p_token IS NULL OR length(p_token) < 32 THEN RAISE EXCEPTION 'A token is required'; END IF;
+  IF EXISTS (SELECT 1 FROM invitations WHERE company_id = p_company AND email = v_email AND type = 'company' AND status = 'pending') THEN
+    RAISE EXCEPTION 'A pending invite already exists for this email';
+  END IF;
+  INSERT INTO invitations (id, type, token, channel, email, org_id, company_id, intended_roles, status, expires_at, created_by, admin_type)
+  VALUES (p_id, 'company', p_token, 'email', v_email, NULL, p_company, ARRAY['contractor_admin'], 'pending', now() + interval '7 days', auth.uid(), p_type);
+  RETURN p_token;
+END $$;
+
+CREATE OR REPLACE FUNCTION revoke_company_admin_invite(p_invitation text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_company text;
+BEGIN
+  SELECT company_id INTO v_company FROM invitations WHERE id = p_invitation AND type = 'company' AND status = 'pending' FOR UPDATE;
+  IF v_company IS NULL THEN RAISE EXCEPTION 'No such pending invitation'; END IF;
+  PERFORM assert_company_admin(v_company);
+  UPDATE invitations SET status = 'revoked' WHERE id = p_invitation;
+END $$;
+
+-- Which client organizations have asked to link to the company, by name.
+CREATE OR REPLACE FUNCTION list_pending_company_links(p_company text)
+RETURNS TABLE (link_id text, org_name text, invited_at timestamptz)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  PERFORM assert_company_admin(p_company);
+  RETURN QUERY
+    SELECT l.id, o.name, l.invited_at
+    FROM client_company_links l
+    JOIN organizations o ON o.id = l.org_id
+    JOIN contractor_companies c ON c.id = l.company_id
+    -- The org that defined the company is not asking permission: its own link is not a request.
+    WHERE l.company_id = p_company AND l.status = 'invited' AND l.org_id IS DISTINCT FROM c.defined_by_org_id
+    ORDER BY l.invited_at;
+END $$;
+
 -- ── accepting an invitation keeps what the org typed, and records the admin type ──
 CREATE OR REPLACE FUNCTION public.accept_company_invite(
   p_token text, p_user_id uuid, p_membership_id text, p_legal_name text
@@ -239,6 +314,11 @@ BEGIN
   UPDATE invitations SET status = 'accepted', accepted_user_id = p_user_id, accepted_at = NOW() WHERE token = p_token;
   RETURN v_company_id;
 END $$;
+
+REVOKE ALL ON FUNCTION list_company_admins(text), add_company_admin(text, company_admin_type, text, text, text),
+  revoke_company_admin_invite(text), list_pending_company_links(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION list_company_admins(text), add_company_admin(text, company_admin_type, text, text, text),
+  revoke_company_admin_invite(text), list_pending_company_links(text) TO authenticated;
 
 REVOKE ALL ON FUNCTION match_contractor_companies(text, text, text), define_contractor_company(text, text, text, text, text, text, text, text[], text, boolean),
   nominate_company_admin(text, text, company_admin_type, text, uuid, text, text), remove_company_admin(text), respond_to_company_link(text, boolean)

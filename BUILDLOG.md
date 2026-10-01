@@ -1343,6 +1343,19 @@ Nothing changed in this repository's code. Relatrix gained what S4 and S5 call: 
 
 ---
 
+### 2026-10-05 — M2.5 F1c — the company's side: link requests and admins
+
+**What I Built**:
+- Migration 0019 (still unapplied, so amended rather than followed): `list_company_admins` (admins and pending invitations in one list, with admin type and who nominated), `add_company_admin` (a company's admin invites an external or third-party admin; in-house stays the client org's to nominate), `revoke_company_admin_invite`, `list_pending_company_links` (requests by org name; the defining org's own link is not a request), and a company-side gate `assert_company_admin`. 20 SQL checks now (5 new); the new functions' guards were each removed and caught, and a check for a disabled membership being listed was added because that mutation survived.
+- `/company/admins` (Contractor Admins; "Admins" in the portal nav): accept or decline each organization asking to link, the admin list with Remove (the database refuses the last one, and the page says so), pending invitations with Revoke, and "Invite another admin". `lib/companies/admins.ts` holds the invite flow; 1 new flow check plus 4 mutations.
+- Driven in a browser at phone width as a contractor admin: accept a request, invite a third party (dev link), revoke an invitation, remove an admin, last admin protected. No console errors.
+
+**F1 is complete** (a, b, c). **Not verified**: not applied to production, which needs `npm run db:migrate` for 0019 first; real email delivery; the existing production-backed test suites against 0019.
+
+**What's Next**: ConTrak S4 (contractor-company sync to Relatrix with match-before-create, and "uses" edges), which F1 unblocks; it also needs Ron to create the "Uses contractor" relationship type in Relatrix.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).
