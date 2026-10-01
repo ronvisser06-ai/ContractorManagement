@@ -60,7 +60,7 @@ Ordered so the unblocked work ships first and nothing waits on a repo it does no
 | **S5** | ConTrak | **Capabilities:** F2's catalog terms become a ConTrak-defined vocabulary in Relatrix; picks become proposed capability facts | S3, ConTrak **F2 landed** | A capability picked in ConTrak is waiting in Relatrix's Review with its source. |
 | **S6** | ConTrak | Backfill: existing companies, orgs and links, dry-run first | S2, S4 | The dry run lists exactly what would be sent; the real run is resumable. |
 
-S2 before S3 on purpose: it needs only endpoints that exist, **except** that the tag and source cannot be set through the API today (see S3). S2 therefore sets them with a `notes` marker and `external_refs` only, and S3 upgrades them; or S3's two small additions (`source`, `tags`) are pulled ahead of S2. **Decision for the build: pull them ahead as slice S2a in Relatrix**, so S2 ships with the real flag.
+S2 before S3 on purpose: it needs only endpoints that exist, **except** that the tag and source cannot be set through the API today (see S3). S2 therefore sets them with a `notes` marker and `external_refs` only, and S3 upgrades them; or S3's two small additions (`source`, `tags`) are pulled ahead of S2. **Decision for the build: pull them ahead as slice S2a in Relatrix**, so S2 ships with the real flag. **S2a is built (2026-10-04, RelatrixCRM `BUILD.md` §6.4):** `source = contrak` (a new value in a closed list, companies only), tags, and the `source=` / `tag=` list filters, plus Companies → From ConTrak in the app. Not yet applied to the hosted Relatrix project.
 
 ## 6. Risks and what cannot be proven from here
 
