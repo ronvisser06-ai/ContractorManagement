@@ -31,6 +31,7 @@
 | F1-3 | The org nominates the **first** admin at creation (and may re-send or replace that nomination while it is unaccepted). After that **only the company's admins** add/remove admins, with a **last-admin guard**. |
 | F1-4 | **Three admin types** on the admin's company membership: `company_staff` · `client_staff` (in-house) · `third_party`. Shown in both portals. |
 | F1-5 *(locked, security)* | An admin invite can only be accepted by the person it was sent to: the signed-in user's primary or verified email must equal the invitation email. Forwarded links don't work. |
+| F1-6 *(Ron, 2026-10-01)* | **Search first, to prevent duplicates (no merging later).** Search is fuzzy (typos, punctuation, "Ltd/Inc/Corp", partial names) and also matches business number and website domain. Companies the org is already linked to (or has requested) appear **with their link status** instead of disappearing. The database also refuses duplicates: **same business number never twice**; an **identical normalized name** needs an explicit "this is a different company" confirmation. |
 
 ## The current flow and its gaps (verified 2026-10-01)
 
@@ -38,6 +39,8 @@
 - `/register/company` only **signs up a new account** → an existing user (in-house staff, third-party admin) gets "user already registered" and **cannot accept**.
 - `accept_company_invite` (SECURITY DEFINER) takes `p_user_id` as a parameter (called with the service-role client); no email-match check; no admin type.
 - Good: RLS helpers (`org_linked_company_ids`, `user_linked_org_ids`) only count **`active`** links — a pending request already grants no visibility.
+- **Security holes found + closed in Step 1 (migration 0018; proven by an attack script before/after):** (a) a client admin could insert an **active** link to any company → read its profile and workers; (b) could flip its own pending link to active; (c) could insert a company-admin invitation for any company and call `accept_company_invite` (EXECUTE granted to PUBLIC, takes a user id) → **become that company's admin and rename it**. Production had no companies yet, so nothing was exposed.
+- **Found in Step 1, fix in Step 2:** `sendEmail` throws when Resend refuses a recipient; with the test sender `onboarding@resend.dev` Resend only delivers to the account owner → every invite to anyone else 500s *after* the invite is created. Step 2: verified sending domain + graceful fallback (show the link).
 
 ## Canonical references
 

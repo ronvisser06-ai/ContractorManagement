@@ -1291,6 +1291,34 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-10-01 — F1 Step 1 — Schema, RPCs and RLS for org-defined companies (+ security fixes)
+
+**Security holes found and closed** (pre-existing since M1; proven with an attack script on ConTrak Dev before and after — production had no companies, nothing exposed):
+- A client admin could **insert an `active` link to any company** → read its profile/contacts and workers.
+- A client admin could **update its own pending link to `active`**.
+- A client admin could **insert a company-admin invitation for any company** and call `accept_company_invite` (EXECUTE granted to PUBLIC, takes a user id) → **became that company's contractor_admin and renamed it**.
+- Fix: dropped the org link insert/update policies (direct insert now only `invited` links for companies the org created — keeps the old invite flow alive until Step 2); rewrote the invitations insert policy (worker invites by company admins; company-admin invites by company admins, or by the creating org while the company has no admin); `accept_company_invite` and `claim_worker_invite` are **service_role only** (the app already calls them that way); the new accept RPC has a takeover guard.
+- After: all three attacks refused (`42501` on the RPC), victim untouched.
+
+**What I Built** — migration `0018_company_definition.sql` (+ journal entry; schema.ts types):
+- `company_admin_type` enum (`company_staff` / `client_staff` / `third_party`) on memberships + invitations; `contractor_companies.business_number` (normalized, **unique**), `website`, `created_by_org_id`, generated `name_key` (normalized name, **pg_trgm** GIN index); link status `declined`.
+- RPCs (SECURITY DEFINER, `auth.uid()`-based, authenticated only): `create_contractor_company` (duplicate guards: same business number → refused; identical normalized name → `possible_duplicate` unless confirmed), `find_company_matches` (fuzzy name / business number / website domain; returns **name + the org's own link status only**; stub "Invited: …" names never returned), `request_company_link`, `respond_to_link_request`, `accept_company_admin_invite` (signed-in, **email must match**, takeover guard, upgrades an existing membership), `replace_admin_nomination` (creating org, only while no admin), `invite_company_admin`, `remove_company_admin` (**last-admin guard**), read RPCs `org_company_links`, `pending_link_requests`.
+- RLS: creating org can read the profile it defined (never workers — still gated by an `active` link).
+- Ron's refinement recorded as decision **F1-6** in the brief: search first to prevent duplicates; already-linked companies show their status.
+
+**Tests**: `company-definition.test.mts` **32/32** (security, create + duplicate guards, fuzzy search incl. typo/BN/domain, link request/accept/decline, invite accept incl. email mismatch/reuse/expiry/forged-invite takeover guard, admin invite/remove/last-admin). Full DB suite **132/132** on ConTrak Dev. tsc, lint, build clean. Old "Invite a company" form verified over HTTP: company + invited link + pending invitation created under the new policies.
+
+**What Went Wrong / found**:
+- Test-side: labels with capitals vs Auth's lowercase emails; one duplicate-name expectation used a different name; empty set-returning RPC returns `[]` not `null`. Fixed in the test.
+- **Invite email crash (pre-existing, Step 2):** `sendEmail` throws when Resend rejects a recipient. With the test sender `onboarding@resend.dev`, Resend only delivers to the account owner → in production **every invite to anyone else returns 500 after the invite is created**. Step 2: verified sending domain + fallback to showing the link.
+- Logged for **F8**: the 8 RLS helper functions (`user_org_ids(uid)` etc.) are executable by `anon`/`authenticated` with an arbitrary user id → reveals which orgs/companies/sites a user id belongs to (ids only). Fix = move helpers to a non-exposed schema and rewrite the policies.
+
+**Production**: migration **not yet applied** to ConTrak — recommended now (security), ahead of the brief's Step 5: `npm run db:migrate:prod`.
+
+**What's Next**: apply 0018 to production → F1 Step 2 (org "Add company" flow + invite delivery fix).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

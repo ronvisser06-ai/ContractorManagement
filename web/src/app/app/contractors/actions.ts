@@ -43,6 +43,9 @@ export async function inviteContractorCompany(formData: FormData) {
     legal_name: `Invited: ${contactEmail}`,
     contact_email: contactEmail,
     status: 'active',
+    // Required by the 0018 link/invitation policies (org may only invite for
+    // companies it created). This stub path is replaced in F1 Step 2.
+    created_by_org_id: org.id,
   })
   if (coErr) redirect(`/app/contractors?error=${encodeURIComponent(coErr.message)}`)
 

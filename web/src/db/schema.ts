@@ -218,7 +218,14 @@ export const onboardingStatusEnum = pgEnum('onboarding_status', [
 ])
 
 // Bridge domain — state of a client ↔ contractor company relationship
-export const linkStatusEnum = pgEnum('link_status', ['invited', 'active', 'suspended'])
+export const linkStatusEnum = pgEnum('link_status', ['invited', 'active', 'suspended', 'declined'])
+
+// Contractor domain — how a company admin relates to the company (F1, decision F1-4)
+export const companyAdminTypeEnum = pgEnum('company_admin_type', [
+  'company_staff',
+  'client_staff',
+  'third_party',
+])
 
 // Bridge domain — state of a site ↔ company assignment or worker activation
 export const assignmentStatusEnum = pgEnum('assignment_status', ['active', 'removed'])
@@ -249,6 +256,12 @@ export const contractorCompanies = pgTable('contractor_companies', {
   contactEmail: citext('contact_email'),
   contactPhone: text('contact_phone'),
   logoAssetId: text('logo_asset_id'), // FK assets (deferred until M2 media)
+  // F1 (migration 0018): normalized by RPC; unique when present (hard duplicate guard)
+  businessNumber: text('business_number'),
+  website: text('website'),
+  createdByOrgId: text('created_by_org_id').references(() => organizations.id),
+  // Generated in SQL: company_name_key(legal_name) — trigram-indexed for search
+  nameKey: text('name_key'),
   status: userStatusEnum('status').notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -271,6 +284,7 @@ export const companyMemberships = pgTable(
       .notNull()
       .default('entered'),
     invitedEmail: citext('invited_email'), // email the invite targeted
+    adminType: companyAdminTypeEnum('admin_type'), // set for contractor_admin memberships (F1)
     status: membershipStatusEnum('status').notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -375,6 +389,7 @@ export const invitations = pgTable('invitations', {
   orgId: text('org_id').references(() => organizations.id),
   companyId: text('company_id').references(() => contractorCompanies.id),
   intendedRoles: text('intended_roles').array().notNull().default([]),
+  adminType: companyAdminTypeEnum('admin_type'), // company-admin invitations (F1)
   status: invitationStatusEnum('status').notNull().default('pending'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdBy: uuid('created_by')
