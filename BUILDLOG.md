@@ -1319,6 +1319,31 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-10-01 — F1 Step 2 — Org "Add company" flow (search first) + invite email fix
+
+**What I Built**:
+- `lib/email/send.ts` — **no longer throws** when Resend refuses a recipient: logs and returns `{ sent: false }`, so every caller (company/worker invites, email verification) shows the link instead of a 500. New `companyAdminInviteEmail` template (HTML-escaped names).
+- `lib/companies/labels.ts` — admin types (labels + hints), link-status labels ("Linked" / "Awaiting admin" / "Requested" / "Declined"), RPC error code → friendly message.
+- **`/app/contractors/new`** — **search first** (F1-6): no create form until a search is run; results show name + the org's own status ("Already linked", "Pending", "Declined — you can ask again") with **Request link**; when matches exist the create form sits behind "None of these — create a new company" (added after the visual check so an existing company isn't skipped past).
+- `add-company-form.tsx` (client, `useActionState`) — details, three admin types; **Our staff** swaps the email box for a picker of the org's members; on `possible_duplicate` the typed values are kept and a "this is a different company" checkbox appears.
+- `actions.ts` — `createCompany`, `requestLink`, `resendNomination` (same person, fresh link), `replaceNomination` (different person/type); all via the 0018 RPCs. Old stub `inviteContractorCompany` + its form **removed**. Invite links point to **`/invite/company?token=…`** (page arrives in Step 3).
+- `/app/contractors` — lists every link via `org_company_links` (names visible for requested links too), status labels, pending nominations (email, type, expiry, link, Re-send, Replace), "Ask again" on declined; worker slice for linked companies unchanged.
+
+**Verified**:
+- HTTP, production build, demo client admin on ConTrak Dev — **16/16**: search-first gate; typo search finds Birch → Request link → "Requested" (no duplicate); already-linked Apex has no button; create with each admin type (company staff / our staff picked from members / third party) → company + invited link + pending invite with the right type, business number normalized; Resend refusal → link shown (**303, not 500**); same name → warning with values kept, confirm creates; same business number refused even when confirmed; Re-send revokes and re-issues; Replace swaps person/type.
+- Browser (Ron signed in, Claude drove): Contractors page, add page before/after search, "Our staff" picker, collapsed create form with matches, desktop + 375px.
+- `company-labels.test.mts` 9/9; full suite **141/141** on ConTrak Dev; tsc, lint, build clean.
+
+**What Went Wrong**:
+- Check script posted the create form to `/app/contractors/new` without `?q=` (where the form isn't rendered) — a script bug; the page was right. Fixed by posting to the form's own URL.
+- Started the preview server in parallel with a rebuild — restarted it after the build finished.
+
+**Notes**: No schema change → no production migration this step. Until Step 3, invite links (`/invite/company`) 404. Name-only search results can look identical for a confirmed same-name company — province (F3) will disambiguate.
+
+**What's Next**: F1 Step 3 — `/invite/company` accept page (signed-in / sign-in / sign-up paths, email must match, lands in the company via F0) + retire `/register/company` and `accept_company_invite`.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

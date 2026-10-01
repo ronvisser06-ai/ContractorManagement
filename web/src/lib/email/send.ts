@@ -19,8 +19,29 @@ export async function sendEmail(opts: {
     html: opts.html,
     text: opts.text,
   })
-  if (error) throw new Error(error.message)
+  if (error) {
+    // Never crash the caller: the invite/verification row already exists, so
+    // callers fall back to showing the link on screen. Common cause: the test
+    // sender onboarding@resend.dev only delivers to the Resend account owner —
+    // a verified sending domain (RESEND_FROM) is needed for real recipients.
+    console.error(`[email] Resend refused "${opts.subject}" to ${opts.to}: ${error.message}`)
+    return { sent: false }
+  }
   return { sent: true }
+}
+
+export function companyAdminInviteEmail(opts: {
+  link: string
+  companyName: string
+  orgName: string
+}): { html: string; text: string } {
+  const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!)
+  return {
+    html: `<p>${esc(opts.orgName)} has set up <strong>${esc(opts.companyName)}</strong> on the Contractor Orientation platform and nominated you as its administrator.</p>
+<p><a href="${opts.link}">Accept and open ${esc(opts.companyName)}</a></p>
+<p>This link expires in 7 days and only works for this email address. If you weren't expecting this, you can ignore it.</p>`,
+    text: `${opts.orgName} has set up ${opts.companyName} on the Contractor Orientation platform and nominated you as its administrator.\n\nAccept: ${opts.link}\n\nThis link expires in 7 days and only works for this email address.`,
+  }
 }
 
 export function companyInviteEmail(link: string): { html: string; text: string } {

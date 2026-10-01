@@ -3,105 +3,158 @@
 import { randomBytes } from 'node:crypto'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { newId } from '@/db/utils'
-import { sendEmail, companyInviteEmail } from '@/lib/email/send'
 import { requireActiveOrg } from '@/lib/context/server'
+import { sendEmail, companyAdminInviteEmail } from '@/lib/email/send'
+import { companyErrorMessage, isAdminType, isPossibleDuplicate } from '@/lib/companies/labels'
 
-export async function inviteContractorCompany(formData: FormData) {
-  // Acts on the user's *active* org, with their roles in that org (F0).
-  const { supabase, user, org, hasRole } = await requireActiveOrg()
+// F1 Step 2 — org-side company definition. All writes go through the
+// SECURITY DEFINER RPCs from migration 0018; RLS no longer lets an org write
+// links or company invitations directly.
 
-  // Application-layer role check; RLS on client_company_links also enforces this.
-  if (!hasRole('client_admin')) {
-    redirect('/app/contractors?error=Only+a+Client+Admin+can+invite+companies')
-  }
-
-  const contactEmail = ((formData.get('contact_email') as string | null) ?? '').trim().toLowerCase()
-  if (!contactEmail) redirect('/app/contractors?error=Contact+email+is+required')
-
-  // Reject a duplicate pending invite for the same email + org
-  const { data: existing } = await supabase
-    .from('invitations')
-    .select('id')
-    .eq('org_id', org.id)
-    .eq('email', contactEmail)
-    .eq('type', 'company')
-    .eq('status', 'pending')
-    .maybeSingle()
-  if (existing) {
-    redirect('/app/contractors?error=A+pending+invite+already+exists+for+this+email')
-  }
-
-  // Stub contractor_companies row — legal_name + profile filled in at Step 3 registration.
-  // Uses the admin client because the user-facing INSERT policy on contractor_companies
-  // is restricted to service-role (company registration comes via SECURITY DEFINER RPC in Step 3).
-  const admin = createAdminClient()
-  const companyId = newId('cco_')
-  const { error: coErr } = await admin.from('contractor_companies').insert({
-    id: companyId,
-    legal_name: `Invited: ${contactEmail}`,
-    contact_email: contactEmail,
-    status: 'active',
-    // Required by the 0018 link/invitation policies (org may only invite for
-    // companies it created). This stub path is replaced in F1 Step 2.
-    created_by_org_id: org.id,
-  })
-  if (coErr) redirect(`/app/contractors?error=${encodeURIComponent(coErr.message)}`)
-
-  // client_company_links — RLS enforces caller must be client_admin for org_id
-  const linkId = newId('ccl_')
-  const { error: linkErr } = await supabase.from('client_company_links').insert({
-    id: linkId,
-    org_id: org.id,
-    company_id: companyId,
-    status: 'invited',
-  })
-  if (linkErr) {
-    await admin.from('contractor_companies').delete().eq('id', companyId)
-    redirect(`/app/contractors?error=${encodeURIComponent(linkErr.message)}`)
-  }
-
-  // Single-use, unguessable token — 32 random bytes → 64 hex chars
-  const token = randomBytes(32).toString('hex')
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-
-  const { error: invErr } = await supabase.from('invitations').insert({
-    id: newId('inv_'),
-    type: 'company',
-    token,
-    channel: 'email',
-    email: contactEmail,
-    org_id: org.id,
-    company_id: companyId,
-    intended_roles: ['contractor_admin'],
-    status: 'pending',
-    expires_at: expiresAt,
-    created_by: user.id,
-  })
-  if (invErr) {
-    await admin.from('client_company_links').delete().eq('id', linkId)
-    await admin.from('contractor_companies').delete().eq('id', companyId)
-    redirect(`/app/contractors?error=${encodeURIComponent(invErr.message)}`)
-  }
-
+async function baseUrl(): Promise<string> {
   const hdrs = await headers()
   const host = hdrs.get('host') ?? 'localhost:3000'
   const proto = host.startsWith('localhost') || /^\d+\.\d/.test(host) ? 'http' : 'https'
-  const link = `${proto}://${host}/register/company?token=${token}`
+  return `${proto}://${host}`
+}
 
-  const { html, text } = companyInviteEmail(link)
+const field = (formData: FormData, name: string) => ((formData.get(name) as string | null) ?? '').trim()
+
+// Emails the nominated admin; returns whether it was delivered. When it isn't
+// (no Resend key, or Resend refused the recipient), callers show the link.
+async function deliverAdminInvite(opts: { to: string; token: string; companyName: string; orgName: string }) {
+  const link = `${await baseUrl()}/invite/company?token=${opts.token}`
+  const { html, text } = companyAdminInviteEmail({ link, companyName: opts.companyName, orgName: opts.orgName })
   const result = await sendEmail({
-    to: contactEmail,
-    subject: "You've been invited to register as a contractor company",
+    to: opts.to,
+    subject: `You've been nominated as administrator of ${opts.companyName}`,
     html,
     text,
   })
+  return result.sent
+}
 
-  if (result.sent) {
-    redirect('/app/contractors?invited=1')
-  } else {
-    console.log(`[DEV] Company invite for ${contactEmail}: ${link}`)
-    redirect(`/app/contractors?invite_token=${token}`)
+function afterInvite(params: Record<string, string>, sent: boolean, token: string): never {
+  const qs = new URLSearchParams(params)
+  if (sent) qs.set('emailed', '1')
+  else qs.set('invite_token', token)
+  redirect(`/app/contractors?${qs.toString()}`)
+}
+
+// ── Create a new company + nominate its first admin ──────────────────────────
+
+export interface AddCompanyState {
+  error?: string
+  possibleDuplicate?: boolean
+  values?: Record<string, string>
+}
+
+const FORM_FIELDS = [
+  'legal_name', 'trade_types', 'business_number', 'website',
+  'contact_name', 'contact_email', 'contact_phone', 'admin_type', 'admin_email', 'staff_email',
+] as const
+
+export async function createCompany(_prev: AddCompanyState, formData: FormData): Promise<AddCompanyState> {
+  const { supabase, org, hasRole } = await requireActiveOrg()
+  const values = Object.fromEntries(FORM_FIELDS.map((f) => [f, field(formData, f)]))
+
+  if (!hasRole('client_admin')) return { error: companyErrorMessage('not_client_admin'), values }
+
+  const adminType = values.admin_type
+  if (!isAdminType(adminType)) return { error: companyErrorMessage('admin_type_required'), values }
+  // In-house admins are picked from the org's members; other types are typed in.
+  const adminEmail = (adminType === 'client_staff' ? values.staff_email : values.admin_email).toLowerCase()
+  if (!values.legal_name) return { error: companyErrorMessage('name_required'), values }
+  if (!adminEmail) return { error: companyErrorMessage('admin_email_required'), values }
+
+  const tradeTypes = values.trade_types
+    ? values.trade_types.split(',').map((t) => t.trim()).filter(Boolean)
+    : []
+  const token = randomBytes(32).toString('hex')
+
+  const { error } = await supabase.rpc('create_contractor_company', {
+    p_org_id: org.id,
+    p_company_id: newId('cco_'),
+    p_link_id: newId('ccl_'),
+    p_invitation_id: newId('inv_'),
+    p_token: token,
+    p_legal_name: values.legal_name,
+    p_admin_email: adminEmail,
+    p_admin_type: adminType,
+    p_trade_types: tradeTypes,
+    p_contact_name: values.contact_name || null,
+    p_contact_email: values.contact_email || null,
+    p_contact_phone: values.contact_phone || null,
+    p_business_number: values.business_number || null,
+    p_website: values.website || null,
+    p_confirm_not_duplicate: formData.get('confirm_not_duplicate') === 'on',
+  })
+  if (error) {
+    return {
+      error: companyErrorMessage(error.message),
+      possibleDuplicate: isPossibleDuplicate(error.message),
+      values,
+    }
   }
+
+  const sent = await deliverAdminInvite({ to: adminEmail, token, companyName: values.legal_name, orgName: org.name })
+  afterInvite({ created: values.legal_name }, sent, token)
+}
+
+// ── Ask an existing company to link (the company must accept) ───────────────
+
+export async function requestLink(formData: FormData) {
+  const { supabase, org, hasRole } = await requireActiveOrg()
+  const companyId = field(formData, 'company_id')
+  const companyName = field(formData, 'company_name')
+  const back = field(formData, 'q')
+  if (!hasRole('client_admin')) redirect('/app/contractors?error=' + encodeURIComponent(companyErrorMessage('not_client_admin')))
+
+  const { error } = await supabase.rpc('request_company_link', {
+    p_org_id: org.id,
+    p_company_id: companyId,
+    p_link_id: newId('ccl_'),
+  })
+  if (error) {
+    const qs = new URLSearchParams({ error: companyErrorMessage(error.message) })
+    if (back) qs.set('q', back)
+    redirect(`/app/contractors/new?${qs.toString()}`)
+  }
+  redirect(`/app/contractors?requested=${encodeURIComponent(companyName)}`)
+}
+
+// ── Pending admin nomination: re-send (fresh link) or replace ────────────────
+
+async function renominate(formData: FormData, email: string, adminType: string, param: 'resent' | 'replaced') {
+  const { supabase, org, hasRole } = await requireActiveOrg()
+  const companyId = field(formData, 'company_id')
+  const companyName = field(formData, 'company_name')
+  if (!hasRole('client_admin')) redirect('/app/contractors?error=' + encodeURIComponent(companyErrorMessage('not_client_admin')))
+  if (!email) redirect('/app/contractors?error=' + encodeURIComponent(companyErrorMessage('admin_email_required')))
+  if (!isAdminType(adminType)) redirect('/app/contractors?error=' + encodeURIComponent(companyErrorMessage('admin_type_required')))
+
+  const token = randomBytes(32).toString('hex')
+  const { error } = await supabase.rpc('replace_admin_nomination', {
+    p_org_id: org.id,
+    p_company_id: companyId,
+    p_invitation_id: newId('inv_'),
+    p_token: token,
+    p_email: email.toLowerCase(),
+    p_admin_type: adminType,
+  })
+  if (error) redirect('/app/contractors?error=' + encodeURIComponent(companyErrorMessage(error.message)))
+
+  const sent = await deliverAdminInvite({ to: email.toLowerCase(), token, companyName, orgName: org.name })
+  afterInvite({ [param]: companyName }, sent, token)
+}
+
+// Same person and type, new link (the old one is revoked; 7 more days).
+export async function resendNomination(formData: FormData) {
+  await renominate(formData, field(formData, 'email'), field(formData, 'admin_type'), 'resent')
+}
+
+// A different person and/or admin type.
+export async function replaceNomination(formData: FormData) {
+  await renominate(formData, field(formData, 'new_email'), field(formData, 'new_admin_type'), 'replaced')
 }
