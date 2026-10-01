@@ -1395,9 +1395,9 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 - Checked "disabled" anywhere in the button HTML — Tailwind's `disabled:` classes always match, so the first pass of that check proved nothing. Re-done on the attribute.
 - Compared a redirect URL with spaces against one encoded with `+`; an inline script broke on an apostrophe (moved to a file).
 
-**Production**: needs `0020` (`company_client_links`) — without it the deployed Clients page lists nothing.
+**Production**: **0020 applied to ConTrak 2026-10-01** (Ron approved). Verified: 21/21 migrations, `company_client_links` present (authenticated only, not anon); deploy of `ed349e3` completed; `/api/health` 200; `/company/clients` signed out → 307 to `/login`.
 
-**What's Next**: apply 0020 to production → F1 Step 5 (end-to-end verification with F1 personas + ship check).
+**What's Next**: F1 Step 5 (end-to-end verification with F1 personas + ship check).
 
 ---
 
