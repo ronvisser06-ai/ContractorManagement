@@ -1369,9 +1369,9 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 **Logged for F8**: `invitations: read if creator or involved` lets *any* member of the org/company read its invitations **including tokens**. Harmless for admin invites (email must match) — check the worker-invite claim path for the same property.
 
-**Production**: needs `0019` (`get_company_invitation`) — without it the deployed invite page shows "not found".
+**Production**: **0019 applied to ConTrak 2026-10-01** (Ron approved). Verified: 20/20 migrations, `get_company_invitation` present (anon-executable by design), `accept_company_invite` gone; deploy of `3c69abc` completed; live `/invite/company` with an unknown token → 200 "Invitation not found"; `/api/health` 200.
 
-**What's Next**: apply 0019 to production → F1 Step 4 (company side: link-request inbox + Admins page).
+**What's Next**: F1 Step 4 (company side: link-request inbox + Admins page).
 
 ---
 
