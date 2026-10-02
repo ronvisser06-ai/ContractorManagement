@@ -1,4 +1,5 @@
-// Queues an organization's lifecycle for Relatrix. Called from the four places a milestone can be reached.
+// Queues what ConTrak wants Relatrix to know: an organization's lifecycle (called from the places a milestone can be reached)
+// and a client → contractor link (called wherever a link is made or changes).
 //
 // It NEVER throws and never waits on Relatrix: the ConTrak action that called it has already succeeded, and a failure here
 // (the queue table not migrated yet, the database busy) must not turn that into an error for the person who did it.
@@ -7,6 +8,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { inngest } from '@/lib/inngest/client'
 import { orgLifecyclePayload } from './lifecycle'
+import { linkPayload, type LinkStatus } from './links'
 import { databaseStore } from './store'
 
 async function first(table: string, column: string, org: string): Promise<string | null> {
@@ -45,3 +47,47 @@ export async function queueOrgLifecycle(orgId: string): Promise<boolean> {
     return false
   }
 }
+
+// ── a client → contractor link ─────────────────────────────────────────────────────────────────────
+
+interface LinkRow {
+  id: string
+  status: LinkStatus
+  accepted_at: string | null
+  organizations: { id: string; name: string } | null
+  contractor_companies: { id: string; legal_name: string; contact_email: string | null } | null
+}
+
+const LINK_SELECT = 'id, status, accepted_at, organizations(id, name), contractor_companies(id, legal_name, contact_email)'
+
+async function queueLinks(column: 'id' | 'company_id', value: string, what: string): Promise<boolean> {
+  try {
+    const supabase = createAdminClient()
+    const { data, error } = (await supabase.from('client_company_links').select(LINK_SELECT).eq(column, value)) as unknown as { data: LinkRow[] | null; error: { message: string } | null }
+    if (error) throw new Error(error.message)
+    const store = databaseStore(supabase)
+    let queued = 0
+    for (const l of data ?? []) {
+      if (!l.organizations || !l.contractor_companies) continue
+      const payload = linkPayload({
+        linkId: l.id,
+        status: l.status,
+        acceptedAt: l.accepted_at,
+        org: { id: l.organizations.id, name: l.organizations.name },
+        company: { id: l.contractor_companies.id, legalName: l.contractor_companies.legal_name, contactEmail: l.contractor_companies.contact_email },
+      })
+      if ((await store.enqueue('client_company_link', l.id, 'link.uses', payload)) === 'queued') queued += 1
+    }
+    if (queued > 0) await inngest.send({ name: 'crm/sync.requested', data: {} }).catch(() => undefined)
+    return true
+  } catch (e) {
+    console.error(`[relatrix] could not queue ${what}:`, e instanceof Error ? e.message : 'unknown error')
+    return false
+  }
+}
+
+/** One link, after it was made or its status changed. Never throws. */
+export const queueLink = (linkId: string) => queueLinks('id', linkId, `link ${linkId}`)
+
+/** Every link of a company, after the company's own details changed or it gained an admin. Never throws. */
+export const queueCompanyLinks = (companyId: string) => queueLinks('company_id', companyId, `links of company ${companyId}`)

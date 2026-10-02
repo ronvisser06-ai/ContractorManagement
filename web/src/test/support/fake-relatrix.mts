@@ -48,6 +48,24 @@ export interface FakeActivity {
   deal_id: string | null
 }
 
+export interface FakeType {
+  id: string
+  code: string
+  label: string
+  from_kind: string
+  to_kind: string
+  retired_at: string | null
+}
+
+export interface FakeRelationship {
+  id: string
+  type_id: string
+  from_company_id: string | null
+  to_company_id: string | null
+  started_on: string | null
+  ended_on: string | null
+}
+
 export interface RecordedRequest {
   method: string
   url: string
@@ -63,6 +81,10 @@ export interface FakeRelatrix {
   pipelines: FakePipeline[]
   deals: Map<string, FakeDeal>
   activities: FakeActivity[]
+  types: FakeType[]
+  relationships: Map<string, FakeRelationship>
+  /** The relationship type Ron creates by hand: "Uses contractor". */
+  addUsesType(over?: Partial<FakeType>): FakeType
   /** Every stage move Relatrix was asked for, in order. */
   moves: { deal: string; stage: string }[]
   /** Makes the pipeline Ron sets up: "ConTrak customers" with its four stages (pass fewer to leave one out). */
@@ -90,6 +112,8 @@ export async function startFakeRelatrix(): Promise<FakeRelatrix> {
   const pipelines: FakePipeline[] = []
   const deals = new Map<string, FakeDeal>()
   const activities: FakeActivity[] = []
+  const types: FakeType[] = []
+  const relationships = new Map<string, FakeRelationship>()
   const moves: { deal: string; stage: string }[] = []
   const replays = new Map<string, { status: number; body: unknown; hash: string }>()
   const requests: RecordedRequest[] = []
@@ -182,9 +206,43 @@ export async function startFakeRelatrix(): Promise<FakeRelatrix> {
       })
     }
 
+    if (url.pathname === '/api/v1/relationship-types' && req.method === 'GET') return send(200, { data: types })
+
+    if (url.pathname === '/api/v1/relationships' && req.method === 'GET') {
+      const type = types.find((t) => t.code === url.searchParams.get('type'))
+      const company = url.searchParams.get('company_id')
+      const found = [...relationships.values()].filter((r) => (!type || r.type_id === type.id) && (!company || r.from_company_id === company || r.to_company_id === company))
+      return send(200, { data: found, next_cursor: null })
+    }
+    if (url.pathname === '/api/v1/relationships' && req.method === 'POST') {
+      return replayable(() => {
+        const type = types.find((t) => t.code === body?.type)
+        if (!type) return { status: 422, body: { error: { code: 'invalid_request', message: 'No such relationship type.' } } }
+        if (!companies.has(String(body?.from_company_id)) || !companies.has(String(body?.to_company_id))) return { status: 422, body: { error: { code: 'invalid_request', message: 'Both ends must be records in this workspace.' } } }
+        n += 1
+        const r: FakeRelationship = {
+          id: `00000000-0000-4000-c000-${String(n).padStart(12, '0')}`, type_id: type.id, from_company_id: String(body?.from_company_id), to_company_id: String(body?.to_company_id),
+          started_on: (body?.started_on as string | undefined) ?? null, ended_on: null,
+        }
+        relationships.set(r.id, r)
+        return { status: 201, body: { data: r } }
+      })
+    }
+    const edge = /^\/api\/v1\/relationships\/([^/]+)$/.exec(url.pathname)
+    if (edge && req.method === 'PATCH') {
+      const r = relationships.get(edge[1]!)
+      if (!r) return send(404, { error: { code: 'not_found', message: 'No such relationship.' } })
+      if (body && 'ended_on' in body) r.ended_on = (body.ended_on as string | null) ?? null
+      return send(200, { data: r })
+    }
+
     if (url.pathname === '/api/v1/companies' && req.method === 'GET') {
       const refs = [...url.searchParams].filter(([k]) => k.startsWith('external_ref['))
-      const found = [...companies.values()].filter((c) => refs.every(([k, v]) => c.external_refs[k.slice(13, -1)] === v))
+      const name = url.searchParams.get('name')?.toLowerCase()
+      const domain = url.searchParams.get('domain')
+      const found = [...companies.values()].filter(
+        (c) => refs.every(([k, v]) => c.external_refs[k.slice(13, -1)] === v) && (name === undefined || c.name.toLowerCase() === name) && (domain === null || c.domain === domain),
+      )
       return send(200, { data: found, next_cursor: null })
     }
 
@@ -219,6 +277,7 @@ export async function startFakeRelatrix(): Promise<FakeRelatrix> {
       if (body && 'name' in body) company.name = String(body.name)
       if (body && 'source' in body) company.source = (body.source as string | null) ?? null
       if (body && 'tags' in body) company.tags = tidy(body.tags as string[])
+      if (body && 'external_refs' in body) company.external_refs = body.external_refs as Record<string, string>
       return send(200, { data: company })
     }
     return send(404, { error: { code: 'not_found', message: 'No such route.' } })
@@ -233,6 +292,13 @@ export async function startFakeRelatrix(): Promise<FakeRelatrix> {
     pipelines,
     deals,
     activities,
+    types,
+    relationships,
+    addUsesType(over = {}) {
+      const t: FakeType = { id: `00000000-0000-4000-d000-${String(types.length + 1).padStart(12, '0')}`, code: 'uses-contractor', label: 'Uses contractor', from_kind: 'company', to_kind: 'company', retired_at: null, ...over }
+      types.push(t)
+      return t
+    },
     moves,
     addCustomerPipeline(names = ['Signed up', 'Onboarding', 'Live', 'Adopting']) {
       const p: FakePipeline = { id: `00000000-0000-4000-b000-${String(pipelines.length + 1).padStart(12, '0')}`, name: 'ConTrak customers', stages: [] }
@@ -255,6 +321,8 @@ export async function startFakeRelatrix(): Promise<FakeRelatrix> {
       pipelines.length = 0
       deals.clear()
       activities.length = 0
+      types.length = 0
+      relationships.clear()
       moves.length = 0
       replays.clear()
       requests.length = 0

@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { requireActiveCompany } from '@/lib/context/server'
+import { queueCompanyLinks } from '@/lib/relatrix/queue'
 
 export async function updateCompanyProfile(formData: FormData) {
   // Acts on the user's *active* company, with their role in that company (F0).
@@ -43,5 +44,7 @@ export async function updateCompanyProfile(formData: FormData) {
     redirect(`/company/profile?error=${encodeURIComponent(error.message)}`)
   }
 
+  // A renamed company or a new contact domain changes what Relatrix is told about every organization that uses it.
+  await queueCompanyLinks(company.id)
   redirect('/company/profile?saved=1')
 }

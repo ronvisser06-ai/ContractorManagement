@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { newId } from '@/db/utils'
+import { queueCompanyLinks } from '@/lib/relatrix/queue'
 
 export async function registerFromCompanyInvite(formData: FormData) {
   const token = ((formData.get('token') as string | null) ?? '').trim()
@@ -61,7 +62,7 @@ export async function registerFromCompanyInvite(formData: FormData) {
   // Accept the invite atomically: update stub company, create membership, flip link.
   // Uses admin client so this works regardless of whether a session was issued
   // (email confirmation may be enabled on this Supabase project).
-  const { error: rpcErr } = await admin.rpc('accept_company_invite', {
+  const { data: acceptedCompany, error: rpcErr } = await admin.rpc('accept_company_invite', {
     p_token: token,
     p_user_id: userId,
     p_membership_id: membershipId,
@@ -73,6 +74,9 @@ export async function registerFromCompanyInvite(formData: FormData) {
     await admin.auth.admin.deleteUser(userId)
     redirect(`${errBase}${encodeURIComponent(rpcErr.message)}`)
   }
+
+  // The link just went active: tell Relatrix the organization uses this company. Never fails the registration.
+  if (typeof acceptedCompany === 'string') await queueCompanyLinks(acceptedCompany)
 
   // Session is available when email confirmation is OFF (current dev setup).
   if (authData.session) {

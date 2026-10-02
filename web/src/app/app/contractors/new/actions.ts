@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email/send'
 import { requireActiveOrg } from '@/lib/context/server'
-import { queueOrgLifecycle } from '@/lib/relatrix/queue'
+import { queueCompanyLinks, queueOrgLifecycle } from '@/lib/relatrix/queue'
 import { defineCompany, parseDefineForm, type Match } from '@/lib/companies/define'
 
 export interface FormState {
@@ -43,6 +43,7 @@ export async function defineCompanyAction(_prev: FormState, formData: FormData):
   if (result.kind === 'matches') return { matches: result.matches, values }
 
   await queueOrgLifecycle(org.id)
+  await queueCompanyLinks(result.companyId)
   if (result.kind === 'linked') redirect(`/app/contractors?linked=${result.notified > 0 ? 'told' : 'asked'}`)
   if (result.warning) redirect(`/app/contractors?error=${encodeURIComponent(result.warning)}`)
   if (result.invite) redirect(`/app/contractors?invite_token=${result.invite.token}`)

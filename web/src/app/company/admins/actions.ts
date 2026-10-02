@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { sendEmail } from '@/lib/email/send'
 import { requireActiveCompany } from '@/lib/context/server'
 import { addCompanyAdmin } from '@/lib/companies/admins'
+import { queueLink } from '@/lib/relatrix/queue'
 
 const back = (q: string) => redirect(`/company/admins?${q}`)
 const say = (key: 'error' | 'notice', text: string) => `${key}=${encodeURIComponent(text)}`
@@ -22,6 +23,7 @@ export async function respondToLink(formData: FormData) {
   const accept = field(formData, 'accept') === 'yes'
   const { error } = await supabase.rpc('respond_to_company_link', { p_link: field(formData, 'link_id'), p_accept: accept })
   if (error) back(say('error', error.message))
+  if (accept) await queueLink(field(formData, 'link_id'))
   back(say('notice', accept ? 'Link accepted.' : 'Link declined.'))
 }
 

@@ -179,4 +179,113 @@ export const orgCustomer: Handler = {
   },
 }
 
-export const handlers: Record<string, Handler> = { 'company.upsert': companyUpsert, 'org.customer': orgCustomer }
+// ── a contractor company, and who uses it ─────────────────────────────────────────────────────────
+
+/** The relationship type Ron creates in Relatrix (Settings → Relationship types). The API cannot create one, so a missing type blocks the sync. */
+export const USES_CONTRACTOR = 'uses-contractor'
+
+/**
+ * Finds the Relatrix company for a ConTrak contractor, in this order: filed under its ConTrak id, then by website domain,
+ * then by name. Only when none matches is a company made, flagged as from ConTrak.
+ *
+ * A company that already existed is Ron's. It is adopted, not changed: ConTrak adds its tag and files its id, and leaves the
+ * name, the source and everything else alone. If Relatrix already holds a different ConTrak id for it (two ConTrak records for one
+ * real company), that stays and this one shares it, so both reach the same company.
+ */
+export async function matchOrCreateCompany(
+  client: RelatrixClient,
+  spec: { id: string; name: string; domain?: string | undefined },
+  idempotencyKey: string,
+): Promise<Company> {
+  const filed = await client.findCompanyByExternalRef('contrak', spec.id)
+  if (filed) return await upsertFlaggedCompany(client, { ref: 'contrak', id: spec.id, name: spec.name, domain: spec.domain, tags: ['contractor'] }, idempotencyKey)
+
+  const one = (found: Company[], what: string): Company | null => {
+    if (found.length > 1) throw new RelatrixError('setup', `More than one Relatrix company has ${what}: merge them in Relatrix, and the sync will carry on.`, null, 'ambiguous', null)
+    return found[0] ?? null
+  }
+  const match = (spec.domain ? one(await client.findCompaniesByDomain(spec.domain), `the domain ${spec.domain}`) : null) ?? one(await client.findCompaniesByName(spec.name), `the name “${spec.name}”`)
+
+  if (!match) {
+    return await client.createCompany(
+      { name: spec.name, ...(spec.domain ? { domain: spec.domain } : {}), source: CONTRAK_SOURCE, tags: [CONTRAK_TAG, 'contractor'], external_refs: { contrak: spec.id } },
+      idempotencyKey,
+    )
+  }
+  const tags = Array.from(new Set([...match.tags, CONTRAK_TAG, 'contractor']))
+  const patch: { tags?: string[]; external_refs?: Record<string, string> } = {}
+  if (tags.length !== match.tags.length) patch.tags = tags
+  if (match.external_refs.contrak === undefined) patch.external_refs = { ...match.external_refs, contrak: spec.id }
+  return Object.keys(patch).length > 0 ? await client.updateCompany(match.id, patch, idempotencyKey) : match
+}
+
+export interface LinkUsesPayload {
+  contrak_link_id: string
+  status: 'invited' | 'active' | 'suspended'
+  since?: string
+  org: { id: string; name: string }
+  company: { id: string; name: string; domain?: string }
+}
+
+export function parseLinkUses(payload: unknown): LinkUsesPayload {
+  const p = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
+  if (!p) throw new InvalidPayload('The payload is not an object.')
+  const text = (v: unknown, max: number) => (typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null)
+  const linkId = text(p.contrak_link_id, 100)
+  if (!linkId) throw new InvalidPayload('contrak_link_id is required.')
+  if (p.status !== 'invited' && p.status !== 'active' && p.status !== 'suspended') throw new InvalidPayload('status must be invited, active or suspended.')
+  const side = (v: unknown, what: string, domain: boolean) => {
+    const o = v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
+    const id = o && text(o.id, 100)
+    const name = o && text(o.name, 190)
+    if (!o || !id || !name) throw new InvalidPayload(`${what} needs an id and a name of at most 190 characters.`)
+    const out: { id: string; name: string; domain?: string } = { id, name }
+    if (domain && o.domain !== undefined) {
+      const d = text(o.domain, 253)
+      if (!d) throw new InvalidPayload('domain must be text of at most 253 characters.')
+      out.domain = d
+    }
+    return out
+  }
+  const out: LinkUsesPayload = { contrak_link_id: linkId, status: p.status, org: side(p.org, 'org', false), company: side(p.company, 'company', true) }
+  if (p.since !== undefined) {
+    if (typeof p.since !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(p.since)) throw new InvalidPayload('since must be a date, YYYY-MM-DD.')
+    out.since = p.since
+  }
+  return out
+}
+
+/**
+ * A client organization uses a contractor company. Both companies are found or made first (so this never waits on another
+ * sync), then one "Uses contractor" edge runs from the organization's company to the contractor's: made once when the link
+ * is active, ended (never deleted) when it is not, and brought back if the link is. An invited link makes no edge, because
+ * nothing is used yet; the contractor company is still known.
+ */
+export const linkUses: Handler = {
+  describe(payload) {
+    const p = parseLinkUses(payload)
+    return `Would make sure “${p.company.name}” (ConTrak ${p.company.id}) and “${p.org.name}” (ConTrak org ${p.org.id}) are in Relatrix, matching an existing company by id, domain or name first, and ${p.status === 'active' ? 'record that the organization uses it' : 'leave the “Uses contractor” edge ended or absent (link is ' + p.status + ')'}.`
+  },
+
+  async run(payload, { client, idempotencyKey }) {
+    const p = parseLinkUses(payload)
+    const type = await client.findRelationshipType(USES_CONTRACTOR)
+    if (!type || type.retired_at) throw new RelatrixError('setup', 'Relatrix has no active relationship type “Uses contractor” (code uses-contractor). Create it in Settings → Relationship types, from a company to a company.', null, 'no_type', null)
+    if (type.from_kind !== 'company' || type.to_kind !== 'company') throw new RelatrixError('setup', 'The relationship type “Uses contractor” must run from a company to a company.', null, 'bad_type', null)
+
+    const orgCompany = await upsertFlaggedCompany(client, { ref: 'contrak_org', id: p.org.id, name: p.org.name, tags: ['client'] }, `${idempotencyKey}-org`)
+    const contractor = await matchOrCreateCompany(client, { id: p.company.id, name: p.company.name, domain: p.company.domain }, `${idempotencyKey}-co`)
+
+    const edge = (await client.findRelationships(USES_CONTRACTOR, orgCompany.id)).find((r) => r.from_company_id === orgCompany.id && r.to_company_id === contractor.id)
+    const today = new Date().toISOString().slice(0, 10)
+    if (p.status === 'active') {
+      if (!edge) await client.createRelationship({ type: USES_CONTRACTOR, from_company_id: orgCompany.id, to_company_id: contractor.id, ...(p.since ? { started_on: p.since } : {}) }, `${idempotencyKey}-edge`)
+      else if (edge.ended_on) await client.updateRelationship(edge.id, { ended_on: null }, `${idempotencyKey}-edge-on`)
+    } else if (edge && !edge.ended_on) {
+      await client.updateRelationship(edge.id, { ended_on: today }, `${idempotencyKey}-edge-off`)
+    }
+    return { remoteId: contractor.id }
+  },
+}
+
+export const handlers: Record<string, Handler> = { 'company.upsert': companyUpsert, 'org.customer': orgCustomer, 'link.uses': linkUses }

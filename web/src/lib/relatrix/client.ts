@@ -57,6 +57,30 @@ export interface Company {
   external_refs: Record<string, string>
 }
 
+export interface RelationshipType {
+  id: string
+  code: string
+  from_kind: string
+  to_kind: string
+  retired_at: string | null
+}
+
+export interface Relationship {
+  id: string
+  type_id: string
+  from_company_id: string | null
+  to_company_id: string | null
+  ended_on: string | null
+}
+
+export interface RelationshipInput {
+  /** The type's code, e.g. "uses-contractor". */
+  type: string
+  from_company_id: string
+  to_company_id: string
+  started_on?: string
+}
+
 export interface CompanyInput {
   name: string
   domain?: string
@@ -111,7 +135,19 @@ export interface RelatrixClient {
   health(): Promise<void>
   findCompanyByExternalRef(app: string, id: string): Promise<Company | null>
   createCompany(input: CompanyInput, idempotencyKey: string): Promise<Company>
+  /** `external_refs` REPLACES the whole map in Relatrix, so send the merged map. */
   updateCompany(id: string, patch: Partial<Omit<CompanyInput, 'domain'>>, idempotencyKey: string): Promise<Company>
+  /** Companies whose name (or legal name or alias) is exactly this, ignoring case. */
+  findCompaniesByName(name: string): Promise<Company[]>
+  /** Companies with this website domain, as the primary one or any other. */
+  findCompaniesByDomain(domain: string): Promise<Company[]>
+  /** A relationship type by its code; null if the workspace has none. */
+  findRelationshipType(code: string): Promise<RelationshipType | null>
+  /** Every relationship of one type that touches a company. */
+  findRelationships(type: string, companyId: string): Promise<Relationship[]>
+  createRelationship(input: RelationshipInput, idempotencyKey: string): Promise<Relationship>
+  /** Ends an edge (a date) or brings it back (null). Relatrix never deletes one through the API. */
+  updateRelationship(id: string, patch: { ended_on: string | null }, idempotencyKey: string): Promise<Relationship>
   /** A pipeline by its exact name (case-insensitive), with its stages in order; null if there is none. */
   findPipelineByName(name: string): Promise<Pipeline | null>
   findDealByExternalRef(app: string, id: string): Promise<Deal | null>
@@ -197,6 +233,25 @@ export function createRelatrixClient(options: RelatrixClientOptions): RelatrixCl
     }
   }
 
+  const relationship = (data: unknown): Relationship => {
+    const d = asObject(data)
+    if (!d || typeof d.id !== 'string') throw new RelatrixError('refused', 'That did not answer like Relatrix.', null, null, null)
+    return {
+      id: d.id,
+      type_id: typeof d.type_id === 'string' ? d.type_id : '',
+      from_company_id: typeof d.from_company_id === 'string' ? d.from_company_id : null,
+      to_company_id: typeof d.to_company_id === 'string' ? d.to_company_id : null,
+      ended_on: typeof d.ended_on === 'string' ? d.ended_on : null,
+    }
+  }
+
+  const companyList = async (query: string): Promise<Company[]> => {
+    const r = await request('GET', `/api/v1/companies?${query}&limit=20`)
+    const data = asObject(r.body)?.data
+    if (!Array.isArray(data)) throw new RelatrixError('refused', 'That did not answer like Relatrix.', r.status, null, null)
+    return data.map((d) => company({ data: d }))
+  }
+
   const refQuery = (app: string, id: string) => `external_ref%5B${encodeURIComponent(app)}%5D=${encodeURIComponent(id)}`
 
   return {
@@ -219,6 +274,48 @@ export function createRelatrixClient(options: RelatrixClientOptions): RelatrixCl
 
     async updateCompany(id, patch, idempotencyKey) {
       return company((await request('PATCH', `/api/v1/companies/${encodeURIComponent(id)}`, { body: patch, idempotencyKey })).body)
+    },
+
+    findCompaniesByName: (name) => companyList(`name=${encodeURIComponent(name)}`),
+    findCompaniesByDomain: (domain) => companyList(`domain=${encodeURIComponent(domain)}`),
+
+    async findRelationshipType(code) {
+      const r = await request('GET', '/api/v1/relationship-types')
+      const data = asObject(r.body)?.data
+      if (!Array.isArray(data)) throw new RelatrixError('refused', 'That did not answer like Relatrix.', r.status, null, null)
+      const found = data.map(asObject).filter((t): t is Record<string, unknown> => t !== null && t.code === code)
+      const t = found[0]
+      if (!t || typeof t.id !== 'string') return null
+      return {
+        id: t.id,
+        code,
+        from_kind: typeof t.from_kind === 'string' ? t.from_kind : '',
+        to_kind: typeof t.to_kind === 'string' ? t.to_kind : '',
+        retired_at: typeof t.retired_at === 'string' ? t.retired_at : null,
+      }
+    },
+
+    async findRelationships(type, companyId) {
+      const out: Relationship[] = []
+      let cursor: string | null = null
+      // A company with more than a few pages of one type of edge is not a case this integration has.
+      for (let page = 0; page < 10; page += 1) {
+        const r = await request('GET', `/api/v1/relationships?type=${encodeURIComponent(type)}&company_id=${encodeURIComponent(companyId)}&limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+        const body = asObject(r.body)
+        if (!Array.isArray(body?.data)) throw new RelatrixError('refused', 'That did not answer like Relatrix.', r.status, null, null)
+        out.push(...body.data.map(relationship))
+        cursor = typeof body.next_cursor === 'string' ? body.next_cursor : null
+        if (!cursor) return out
+      }
+      throw new RelatrixError('refused', 'That company has too many relationships to read.', null, 'too_many', null)
+    },
+
+    async createRelationship(input, idempotencyKey) {
+      return relationship(asObject((await request('POST', '/api/v1/relationships', { body: input, idempotencyKey })).body)?.data)
+    },
+
+    async updateRelationship(id, patch, idempotencyKey) {
+      return relationship(asObject((await request('PATCH', `/api/v1/relationships/${encodeURIComponent(id)}`, { body: patch, idempotencyKey })).body)?.data)
     },
 
     async findPipelineByName(name) {

@@ -1356,6 +1356,22 @@ Nothing changed in this repository's code. Relatrix gained what S4 and S5 call: 
 
 ---
 
+### 2026-10-02 — Relatrix integration S4 — contractor companies and "uses" edges
+
+**What I Built** (still off by default):
+- `link.uses` handler: for one client→contractor link, finds or makes the organization's company, **matches before creating** the contractor's (ConTrak id, then domain, then name), then keeps one "Uses contractor" edge. Adopting an existing company adds only the `contrak` tag and `contractor` tag and files the ConTrak id; Ron's name and source stay. More than one candidate blocks the sync with a plain message. A missing, retired or wrong-kind relationship type blocks it with the instruction to create it.
+- `links.ts`: what crosses (names, a status, a since-date, and the *domain* of a work email, never an address); `client.ts`: name/domain lookups, relationship types, edges.
+- Hooks: `queueLink` / `queueCompanyLinks` from the invite, the define form, accepting an invitation, accepting a link, and company profile edits.
+- Tests: `relatrix-links.test.mts` (16) against an extended fake Relatrix; 12 mutations of the match and edge logic, each caught. The link select was checked through PostgREST on the scratch database; the real `queueLinks` was not run end to end (it needs Next's runtime).
+
+**Not verified**: nothing talked to the real Relatrix; the free-mail list is a guess at the common providers; a domain match can still merge two genuinely different companies that share a domain (the brief's order, and visible in Relatrix); trade types do not cross; the backfill does not yet include links.
+
+**To turn it on (Ron)**: in Relatrix create the relationship type `uses-contractor` (company to company) and add `relationships:read relationships:write` to the ConTrak key (docs in RelatrixCRM `docs/go-live.md` §7c).
+
+**What's Next**: S5 (capabilities) waits on ConTrak's F2 catalog; otherwise extend the S6 backfill to links.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).
