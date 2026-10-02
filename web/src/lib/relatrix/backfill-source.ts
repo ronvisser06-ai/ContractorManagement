@@ -2,6 +2,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DatedRow, FactsSource } from './backfill.ts'
+import type { LinkRow, LinksSource } from './backfill-links.ts'
 
 const PAGE = 1000
 
@@ -45,6 +46,55 @@ export function databaseSource(supabase: SupabaseClient): FactsSource {
       const m = new Map<string, string>()
       for (let from = 0; ; from += PAGE) {
         const { data, error } = await supabase.from('crm_sync').select('entity_id, payload_hash').eq('entity', 'client_org').eq('op', 'org.customer').order('entity_id', { ascending: true }).range(from, from + PAGE - 1)
+        if (error) throw new Error(`Could not read the sync queue: ${error.message}`)
+        for (const r of (data ?? []) as { entity_id: string; payload_hash: string }[]) m.set(r.entity_id, r.payload_hash)
+        if (!data || data.length < PAGE) break
+      }
+      return m
+    },
+  }
+}
+
+interface LinkQueryRow {
+  id: string
+  status: 'invited' | 'active' | 'suspended'
+  invited_at: string
+  accepted_at: string | null
+  organizations: { id: string; name: string } | null
+  contractor_companies: { id: string; legal_name: string; contact_email: string | null } | null
+}
+
+/** Every client → contractor link, with both sides' names and the contractor's contact address (only its domain leaves). Read-only. */
+export function databaseLinksSource(supabase: SupabaseClient): LinksSource {
+  return {
+    async links() {
+      const out: LinkRow[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from('client_company_links')
+          .select('id, status, invited_at, accepted_at, organizations(id, name), contractor_companies(id, legal_name, contact_email)')
+          .order('invited_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1)
+        if (error) throw new Error(`Could not read company links: ${error.message}`)
+        for (const l of (data ?? []) as unknown as LinkQueryRow[]) {
+          // A link whose organization or company cannot be read is reported by the plan, not guessed at.
+          out.push({
+            linkId: l.id,
+            status: l.status,
+            acceptedAt: l.accepted_at,
+            invitedAt: l.invited_at,
+            org: { id: l.organizations?.id ?? '', name: l.organizations?.name ?? '' },
+            company: { id: l.contractor_companies?.id ?? '', legalName: l.contractor_companies?.legal_name ?? '', contactEmail: l.contractor_companies?.contact_email ?? null },
+          })
+        }
+        if (!data || data.length < PAGE) return out
+      }
+    },
+    async queued() {
+      const m = new Map<string, string>()
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase.from('crm_sync').select('entity_id, payload_hash').eq('entity', 'client_company_link').eq('op', 'link.uses').order('entity_id', { ascending: true }).range(from, from + PAGE - 1)
         if (error) throw new Error(`Could not read the sync queue: ${error.message}`)
         for (const r of (data ?? []) as { entity_id: string; payload_hash: string }[]) m.set(r.entity_id, r.payload_hash)
         if (!data || data.length < PAGE) break

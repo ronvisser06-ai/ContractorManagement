@@ -1372,6 +1372,18 @@ Nothing changed in this repository's code. Relatrix gained what S4 and S5 call: 
 
 ---
 
+### 2026-10-02 — Relatrix integration S6 — backfill of links
+
+**What I Built**: `--links` on `scripts/backfill-relatrix.mjs`: a plan (writes nothing), then `--queue` (`--limit`, `--only` by organization or link id, `--skip`), `--status` as before. `lib/relatrix/backfill-links.ts` builds the same `link.uses` payload the live hooks queue (a test pins the hashes equal), oldest link first, skipping a link whose organization or company is unnamed or unreadable with its reason; `backfill-source.ts` reads links with both sides' names and the contractor's contact address, of which only the domain ever leaves. The link handler finds or makes both companies itself, so no order against the organization backfill is needed.
+
+**Checked**: 10 new tests (including plan → queue → drain → fake Relatrix → two companies per link and one edge per active link, and a second backfill sending nothing); 6 mutations, 5 caught (the sixth is the store's own backstop, as for organizations). The CLI was run against the scratch database through PostgREST: plan, `--queue --limit 2`, the rest, an unchanged plan, `--status`, and live without `--yes` refused (exit 1). A mailbox address gave no domain and no address appeared in a payload.
+
+**Not verified**: nothing talked to a real Relatrix or the production database; a link whose embedded organization or company could not be read by the query would be skipped, which the real database should never produce.
+
+**What's Next**: S5 (capabilities) waits on ConTrak's F2 catalog.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

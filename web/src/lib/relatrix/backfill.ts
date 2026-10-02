@@ -6,8 +6,8 @@
 // Pure over injected sources and a Store, so it is tested without a database. Safe to run twice and to stop halfway: it queues
 // only what is new or has changed since it was last queued, in a stable order (oldest organization first).
 //
-// Contractor companies are not backfilled here. Whether a contractor company is a new Relatrix company or one Ron already has,
-// and which client uses which, is decided by the match-before-create work (slice S4), which waits for ConTrak's F1.
+// This file is the organizations. Client → contractor links (which also bring in the contractor companies, matching before
+// creating) are backfill-links.ts, chosen with --links.
 
 import { orgLifecyclePayload, type OrgFacts } from './lifecycle.ts'
 import { MILESTONE_STAGE, MILESTONES, parseOrgCustomer, type OrgCustomerPayload } from './ops.ts'
@@ -148,6 +148,8 @@ export function describePlan(plan: Plan): string[] {
 
 export interface Args {
   command: 'plan' | 'queue' | 'status'
+  /** Backfill client → contractor links instead of organizations. */
+  links: boolean
   limit: number
   only: string[]
   skip: string[]
@@ -155,12 +157,13 @@ export interface Args {
 }
 
 export function parseArgs(argv: string[]): Args | { error: string } {
-  const args: Args = { command: 'plan', limit: Infinity, only: [], skip: [], yes: false }
+  const args: Args = { command: 'plan', links: false, limit: Infinity, only: [], skip: [], yes: false }
   const list = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!
     if (a === '--queue') args.command = 'queue'
     else if (a === '--status') args.command = 'status'
+    else if (a === '--links') args.links = true
     else if (a === '--yes') args.yes = true
     else if (a === '--limit' || a === '--only' || a === '--skip') {
       const v = argv[++i]
@@ -171,7 +174,7 @@ export function parseArgs(argv: string[]): Args | { error: string } {
         args.limit = n
       } else if (a === '--only') args.only = list(v)
       else args.skip = list(v)
-    } else return { error: `Unknown option ${a}. Use --queue, --status, --limit N, --only ids, --skip ids, --yes.` }
+    } else return { error: `Unknown option ${a}. Use --links, --queue, --status, --limit N, --only ids, --skip ids, --yes.` }
   }
   return args
 }

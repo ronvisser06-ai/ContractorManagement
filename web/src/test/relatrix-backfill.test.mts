@@ -101,9 +101,9 @@ test('the plan writes nothing and says what it would do', async () => {
 })
 
 test('the command line: plan by default, and a mistake is an error, not a guess', () => {
-  assert.deepEqual(parseArgs([]), { command: 'plan', limit: Infinity, only: [], skip: [], yes: false })
-  assert.deepEqual(parseArgs(['--queue', '--limit', '5', '--only', 'a,b', '--skip', 'c', '--yes']), { command: 'queue', limit: 5, only: ['a', 'b'], skip: ['c'], yes: true })
-  assert.deepEqual(parseArgs(['--status']), { command: 'status', limit: Infinity, only: [], skip: [], yes: false })
+  assert.deepEqual(parseArgs([]), { command: 'plan', links: false, limit: Infinity, only: [], skip: [], yes: false })
+  assert.deepEqual(parseArgs(['--queue', '--limit', '5', '--only', 'a,b', '--skip', 'c', '--yes']), { command: 'queue', links: false, limit: 5, only: ['a', 'b'], skip: ['c'], yes: true })
+  assert.deepEqual(parseArgs(['--status']), { command: 'status', links: false, limit: Infinity, only: [], skip: [], yes: false })
   for (const bad of [['--queu'], ['--limit'], ['--limit', '0'], ['--limit', 'x'], ['--limit', '1.5'], ['--only'], ['--only', '--queue'], ['org_1']]) {
     assert.ok('error' in parseArgs(bad), JSON.stringify(bad))
   }

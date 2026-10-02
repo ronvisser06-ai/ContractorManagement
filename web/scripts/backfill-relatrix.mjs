@@ -5,9 +5,11 @@
 //   node --env-file=.env.local scripts/backfill-relatrix.mjs                    show the plan; writes nothing
 //   node --env-file=.env.local scripts/backfill-relatrix.mjs --queue            queue what is new or changed
 //   node --env-file=.env.local scripts/backfill-relatrix.mjs --status           how the queue stands, and what needs attention
+//   node --env-file=.env.local scripts/backfill-relatrix.mjs --links [--queue]  the same for client → contractor links (which also
+//                                                                               bring in the contractor companies, matched before created)
 //
 //   --limit N        queue at most N organizations (a first small batch)
-//   --only id,id     only these organizations
+//   --only id,id     only these organizations (with --links: these organizations' links, or link ids)
 //   --skip id,id     never these (test organizations)
 //   --yes            required with --queue while RELATRIX_SYNC_MODE=live: the drain will send them within a minute
 //
@@ -16,7 +18,8 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { applyPlan, buildPlan, describePlan, parseArgs } from '../src/lib/relatrix/backfill.ts'
-import { databaseSource, queueStatus } from '../src/lib/relatrix/backfill-source.ts'
+import { applyLinkPlan, buildLinkPlan, describeLinkPlan } from '../src/lib/relatrix/backfill-links.ts'
+import { databaseLinksSource, databaseSource, queueStatus } from '../src/lib/relatrix/backfill-source.ts'
 import { readConfig } from '../src/lib/relatrix/config.ts'
 import { databaseStore } from '../src/lib/relatrix/store.ts'
 
@@ -45,9 +48,10 @@ try {
     process.exit(0)
   }
 
-  const plan = await buildPlan(databaseSource(supabase), { only: args.only, skip: args.skip })
+  const what = args.links ? 'links' : 'organizations'
+  const plan = args.links ? await buildLinkPlan(databaseLinksSource(supabase), { only: args.only, skip: args.skip }) : await buildPlan(databaseSource(supabase), { only: args.only, skip: args.skip })
   console.log(`Sync mode: ${mode}`)
-  for (const line of describePlan(plan)) console.log(line)
+  for (const line of args.links ? describeLinkPlan(plan) : describePlan(plan)) console.log(line)
 
   if (args.command === 'plan') {
     console.log('\nNothing was written. Add --queue to queue these.')
@@ -58,8 +62,8 @@ try {
     console.error('\nRefusing: the sync is LIVE, so the drain would start sending these to Relatrix within a minute. Run it in dry-run first, then add --yes.')
     process.exit(1)
   }
-  const result = await applyPlan(plan, databaseStore(supabase), args.limit)
-  console.log(`\nQueued ${result.queued}; ${result.unchanged} were already queued as they stand.`)
+  const result = args.links ? await applyLinkPlan(plan, databaseStore(supabase), args.limit) : await applyPlan(plan, databaseStore(supabase), args.limit)
+  console.log(`\nQueued ${result.queued} ${what}; ${result.unchanged} were already queued as they stand.`)
   console.log(
     mode === 'off'
       ? 'The sync is off, so nothing will be sent. Set RELATRIX_SYNC_MODE=dry-run to see what it would send, then live.'
