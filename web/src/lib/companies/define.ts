@@ -5,6 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { newId } from '../../db/utils.ts'
+import { parseCustomLabels, uniqueLabels } from './capabilities.ts'
 
 export type AdminType = 'in_house' | 'external' | 'third_party'
 export const ADMIN_TYPES: readonly AdminType[] = ['in_house', 'external', 'third_party']
@@ -25,7 +26,8 @@ export type Parsed = { ok: true; input: DefineInput } | { ok: false; error: stri
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /** The form's fields, checked for shape only: the database decides what is allowed. */
-export function parseDefineForm(f: Record<string, string | undefined>): Parsed {
+/** `capabilities` are the catalog labels ticked (a repeated form field, which a plain record cannot hold). */
+export function parseDefineForm(f: Record<string, string | undefined>, capabilities: string[] = []): Parsed {
   const text = (k: string) => (f[k] ?? '').trim()
   const legalName = text('legal_name')
   if (!legalName) return { ok: false, error: 'Company name is required.' }
@@ -42,7 +44,9 @@ export function parseDefineForm(f: Record<string, string | undefined>): Parsed {
     if (type === 'in_house' && !admin.userId) return { ok: false, error: 'Choose a member of your organization.' }
     if (type !== 'in_house' && !EMAIL.test(admin.email)) return { ok: false, error: 'Enter the admin’s email address.' }
   }
-  const tradeTypes = text('trade_types').split(',').map((t) => t.trim()).filter(Boolean).slice(0, 30)
+  // What the company does: the ticked entries and the extras typed, as names; the database files each under the catalog entry it matches.
+  const tradeTypes = uniqueLabels([...capabilities, ...parseCustomLabels(f.custom_capabilities)])
+  if (tradeTypes.length > 60) return { ok: false, error: 'Choose at most 60 capabilities.' }
   return { ok: true, input: { legalName, contactName: text('contact_name'), contactEmail, contactPhone: text('contact_phone'), tradeTypes, admin, decision } }
 }
 

@@ -96,13 +96,19 @@ async function seed() {
   await must('org', admin.from('organizations').insert({ id: orgId, name: `${PREFIX}Northwind Energy` }))
   await must('site', admin.from('sites').insert({ id: siteId, org_id: orgId, name: `${PREFIX}North Plant`, orientation_validity_months: 12 }))
   await must('companies', admin.from('contractor_companies').insert([
-    { id: apex, legal_name: `${PREFIX}Apex Scaffolding`, trade_types: ['Scaffolding', 'Rigging'], contact_name: 'Dana Demo', contact_email: PERSONA_EMAIL },
-    { id: birch, legal_name: `${PREFIX}Birch Electrical`, trade_types: ['Electrical'] },
+    { id: apex, legal_name: `${PREFIX}Apex Scaffolding`, contact_name: 'Dana Demo', contact_email: PERSONA_EMAIL },
+    { id: birch, legal_name: `${PREFIX}Birch Electrical` },
+  ]))
+  // What they do (migration 0020: capabilities, from the shared catalog).
+  await must('capabilities', admin.from('company_capabilities').insert([
+    { id: newId('ccap_'), company_id: apex, capability_id: 'cap_ind_scaffolding' },
+    { id: newId('ccap_'), company_id: apex, capability_id: 'cap_struct_rigging' },
+    { id: newId('ccap_'), company_id: birch, capability_id: 'cap_elec_electrical' },
   ]))
 
   // Memberships — inserted in this order so the default (oldest) company is Apex.
   await must('org membership', admin.from('org_memberships').insert({ id: newId('om_'), user_id: persona, org_id: orgId, roles: ['client_admin'], status: 'active' }))
-  const membership = (userId, companyId, roles) => ({ id: newId('mem_'), user_id: userId, company_id: companyId, roles, onboarding_status: 'account_created', status: 'active' })
+  const membership = (userId, companyId, roles) => ({ id: newId('mem_'), user_id: userId, company_id: companyId, roles, admin_type: roles.includes('contractor_admin') ? 'external' : null, onboarding_status: 'account_created', status: 'active' })
   await must('apex admin', admin.from('company_memberships').insert(membership(persona, apex, ['contractor_admin'])))
   await must('birch worker', admin.from('company_memberships').insert(membership(persona, birch, ['worker'])))
   await must('apex workers', admin.from('company_memberships').insert([membership(worker1, apex, ['worker']), membership(worker2, apex, ['worker'])]))

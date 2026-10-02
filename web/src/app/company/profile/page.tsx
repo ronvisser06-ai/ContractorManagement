@@ -2,6 +2,8 @@ import { requireActiveCompany } from '@/lib/context/server'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { CapabilityPicker } from '@/components/capability-picker'
+import { groupCatalog, type CatalogEntry } from '@/lib/companies/capabilities'
 import { updateCompanyProfile } from './actions'
 
 interface Props {
@@ -10,7 +12,6 @@ interface Props {
 
 interface CompanyRow {
   legal_name: string
-  trade_types: string[]
   contact_name: string | null
   contact_email: string | null
   contact_phone: string | null
@@ -22,11 +23,22 @@ export default async function CompanyProfilePage({ searchParams }: Props) {
 
   const { data: rawCompany } = await supabase
     .from('contractor_companies')
-    .select('legal_name, trade_types, contact_name, contact_email, contact_phone, status')
+    .select('legal_name, contact_name, contact_email, contact_phone, status')
     .eq('id', active.id)
     .maybeSingle()
 
   const company = rawCompany as CompanyRow | null
+
+  const [{ data: rawCatalog }, { data: rawHeld }] = await Promise.all([
+    supabase.from('capabilities').select('id, code, label, category, retired_at').order('category').order('label'),
+    supabase.from('company_capabilities').select('capability_id, custom_label').eq('company_id', active.id),
+  ])
+  const catalog = (rawCatalog ?? []) as CatalogEntry[]
+  const held = (rawHeld ?? []) as { capability_id: string | null; custom_label: string | null }[]
+  const heldIds = new Set(held.flatMap((h) => (h.capability_id ? [h.capability_id] : [])))
+  const customLabels = held.flatMap((h) => (h.custom_label ? [h.custom_label] : []))
+  const groups = groupCatalog(catalog, heldIds)
+  const heldNames = [...catalog.filter((e) => heldIds.has(e.id)).map((e) => e.label), ...customLabels]
   const { error, saved } = await searchParams
 
   return (
@@ -73,18 +85,12 @@ export default async function CompanyProfilePage({ searchParams }: Props) {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="trade_types">
-                Trade / work types{' '}
-                <span className="font-normal text-muted-foreground">(comma-separated)</span>
-              </Label>
-              <Input
-                id="trade_types"
-                name="trade_types"
-                placeholder="Electrical, HVAC, Civil"
-                defaultValue={company?.trade_types?.join(', ') ?? ''}
-              />
-            </div>
+          </div>
+
+          <div className="space-y-3 rounded-lg border bg-card p-4">
+            <h2 className="text-sm font-medium">What your company does</h2>
+            <p className="text-xs text-muted-foreground">Clients you work with can see this, and filter by it.</p>
+            <CapabilityPicker groups={groups} selected={heldIds} custom={customLabels.join('\n')} />
           </div>
 
           <div className="space-y-4 rounded-lg border bg-card p-4">
@@ -134,9 +140,7 @@ export default async function CompanyProfilePage({ searchParams }: Props) {
       ) : (
         <div className="space-y-4 rounded-lg border bg-card p-4">
           <p className="font-medium">{company?.legal_name}</p>
-          {company?.trade_types?.length ? (
-            <p className="text-sm text-muted-foreground">{company.trade_types.join(', ')}</p>
-          ) : null}
+          {heldNames.length > 0 && <p className="text-sm text-muted-foreground">{heldNames.join(', ')}</p>}
         </div>
       )}
     </div>

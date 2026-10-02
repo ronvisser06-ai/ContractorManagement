@@ -11,18 +11,21 @@ import { defineCompany, parseDefineForm, type Match } from '@/lib/companies/defi
 export interface FormState {
   error?: string
   matches?: Match[]
+  /** The capabilities ticked, handed back with the rest of what was typed. */
+  selected?: string[]
   /** What was typed, handed back because React clears an uncontrolled form after every action. */
   values?: Record<string, string>
 }
 
 export async function defineCompanyAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const selected = formData.getAll('capability').filter((v): v is string => typeof v === 'string')
   const { supabase, org, hasRole } = await requireActiveOrg()
   const values: Record<string, string> = {}
-  for (const [k, v] of formData.entries()) if (typeof v === 'string' && k !== 'decision' && !k.startsWith('$')) values[k] = v
-  if (!hasRole('client_admin')) return { error: 'Only a Client Admin can add a contractor company.', values }
+  for (const [k, v] of formData.entries()) if (typeof v === 'string' && k !== 'decision' && k !== 'capability' && !k.startsWith('$')) values[k] = v
+  if (!hasRole('client_admin')) return { error: 'Only a Client Admin can add a contractor company.', values, selected }
 
-  const parsed = parseDefineForm(Object.fromEntries([...formData.entries()].filter(([, v]) => typeof v === 'string')) as Record<string, string>)
-  if (!parsed.ok) return { error: parsed.error, values }
+  const parsed = parseDefineForm(Object.fromEntries([...formData.entries()].filter(([, v]) => typeof v === 'string')) as Record<string, string>, selected)
+  if (!parsed.ok) return { error: parsed.error, values, selected }
 
   const hdrs = await headers()
   const host = hdrs.get('host') ?? 'localhost:3000'
@@ -39,8 +42,8 @@ export async function defineCompanyAction(_prev: FormState, formData: FormData):
     parsed.input,
   )
 
-  if (result.kind === 'invalid') return { error: result.error, values }
-  if (result.kind === 'matches') return { matches: result.matches, values }
+  if (result.kind === 'invalid') return { error: result.error, values, selected }
+  if (result.kind === 'matches') return { matches: result.matches, values, selected }
 
   await queueOrgLifecycle(org.id)
   await queueCompanyLinks(result.companyId)

@@ -1398,6 +1398,20 @@ Nothing changed in this repository's code. Relatrix gained what S4 and S5 call: 
 
 ---
 
+### 2026-10-02 — M2.5 F2b — picking capabilities (company profile and the org's form)
+
+**What I Built**:
+- `CapabilityPicker` (`components/capability-picker.tsx`): the catalog by category (collapsible, open where something is chosen, phone-friendly), plus "Anything else you do", one per line. Used on the **company profile** (replacing the comma-separated trades box; posts catalog ids to `set_company_capabilities`, a non-admin sees the list read-only) and on the **org's add-company form** (posts names, which the database files under the catalog entry they match). A retired entry shows, marked, only to a company that already holds it.
+- Migration 0020 (still unapplied, so amended): `contractor_companies.trade_types` is dropped after its data is copied; the Drizzle schema, the profile action and the dev persona seed no longer use it (the seed also needed `admin_type`, from 0019).
+- `lib/companies/capabilities.ts` (pure) and a 4-test unit file. Two bugs found by the checks while building it: a typed extra repeating a ticked name in another case was kept twice, and splitting extras on commas would have cut "Camp, catering and janitorial" in two (names are now one per line).
+- Checked: the 13 capability checks (the copy check rebuilds the old column inside its transaction and then runs the drop), the 20 company-admin checks and the 9 flow checks all pass on the scratch database; the **screens were driven in a browser** at phone width: the profile showed what the company holds, saved a new tick and extras (a typed "Electrical" stayed the catalog entry, not a duplicate), and the org form created a company with a ticked entry and a custom one; a refused submit kept the ticks and the typed text. No console errors beyond the dev overlay's hydration notice.
+
+**Not verified**: not applied to production; no real email; a company's capabilities do not reach Relatrix yet (S5).
+
+**What's Next**: F2c: the client's Contractors page shows each linked company's capabilities and filters by one. Then S5 can send the catalog to Relatrix as a vocabulary and each company's capabilities as proposals.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

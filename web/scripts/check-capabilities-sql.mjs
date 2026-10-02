@@ -171,20 +171,22 @@ await check('a row is a catalog entry or a custom label, never both or neither, 
   await rejects(tx, () => tx`insert into company_capabilities (id, company_id, custom_label) values ('f', 'cco_1', 'STONEWORK')`, /custom_idx/)
 })
 
-await check('a company an org defines starts with the typed trades as capabilities, and trade_types is left alone', async (tx, w) => {
+await check('a company an org defines starts with the typed trades as capabilities', async (tx, w) => {
   const [r] = await as(tx, w.orgAdmin, () => tx`select * from define_contractor_company('org_1', ${id('cco_')}, ${id('ccl_')}, 'Cedar Works', null, null, null, ${['Electrical', 'Heritage masonry', 'electrical', ' ']}, null, false)`)
   assert.deepEqual(await held(tx, r.company_id), ['electrical', 'custom:Heritage masonry'])
-  assert.deepEqual((await tx`select trade_types from contractor_companies where id = ${r.company_id}`)[0].trade_types, [])
 })
 
 await check('what companies already typed is copied: a catalog name becomes the entry, the rest custom, duplicates once, nothing lost', async (tx) => {
+  // The column is dropped by the migration, so the state before it is rebuilt here, inside the transaction.
+  await tx`alter table contractor_companies add column trade_types text[] not null default '{}'`
   await tx`update contractor_companies set trade_types = ${['Electrical', ' scaffolding ', 'Heritage Masonry Restoration', 'electrical', 'WELDING & fabrication', '', '!!', 'x'.repeat(81)]} where id = 'cco_1'`
   await tx`update contractor_companies set trade_types = ${['Roofing']} where id = 'cco_2'`
-  const copy = migration.slice(migration.indexOf('-- ── what companies already typed'))
+  const copy = migration.slice(migration.indexOf('-- ── what companies already typed'), migration.indexOf('-- Copied above'))
   await tx.unsafe(copy)
   assert.deepEqual(await held(tx, 'cco_1'), ['electrical', 'scaffolding', 'custom:Heritage Masonry Restoration', 'custom:WELDING & fabrication'])
   assert.deepEqual(await held(tx, 'cco_2'), ['roofing'])
-  assert.deepEqual((await tx`select trade_types from contractor_companies where id = 'cco_1'`)[0].trade_types.length, 8, 'the old column is untouched')
+  await tx.unsafe(migration.slice(migration.indexOf('ALTER TABLE contractor_companies DROP COLUMN')))
+  assert.equal((await tx`select count(*)::int as n from information_schema.columns where table_name = 'contractor_companies' and column_name = 'trade_types'`)[0].n, 0, 'and the column is then gone')
 })
 
 await check('deleting a company takes its capabilities with it, and a retired entry that is held cannot be deleted', async (tx, w) => {

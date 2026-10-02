@@ -50,8 +50,8 @@ await org(`org_b_${tag}`, 'Client B', adminB)
 const A = { id: `org_a_${tag}`, name: 'Client A' }
 const B = { id: `org_b_${tag}`, name: 'Client B' }
 const deps = (who, o, ok = true) => ({ supabase: asUser(who), admin: service, org: o, send: send(ok), origin: 'https://app.example' })
-const form = (over = {}) => ({ legal_name: `Apex ${tag} Electric Ltd`, contact_email: `office@apex-${tag}.test`, contact_name: 'Pat', contact_phone: '403 555 0100', trade_types: 'Electrical, Scaffolding', admin_type: 'external', admin_email: `boss@apex-${tag}.test`, ...over })
-const input = (over) => { const p = parseDefineForm(form(over)); assert.ok(p.ok, p.error); return p.input }
+const form = (over = {}) => ({ legal_name: `Apex ${tag} Electric Ltd`, contact_email: `office@apex-${tag}.test`, contact_name: 'Pat', contact_phone: '403 555 0100', custom_capabilities: '', admin_type: 'external', admin_email: `boss@apex-${tag}.test`, ...over })
+const input = (over, caps = ['Electrical', 'Scaffolding']) => { const p = parseDefineForm(form(over), caps); assert.ok(p.ok, p.error); return p.input }
 
 async function check(name, fn) {
   mails.length = 0
@@ -62,8 +62,10 @@ await check('the form is read for shape, and the decision and admin fields are c
   for (const [over, text] of [[{ legal_name: ' ' }, /name is required/], [{ contact_email: 'nope' }, /not an email/], [{ admin_type: '' }, /Choose who/], [{ admin_type: 'in_house', admin_user_id: '' }, /Choose a member/], [{ admin_type: 'external', admin_email: 'x' }, /admin’s email/], [{ decision: 'link:x' }, /Unknown choice/], [{ decision: 'sudo' }, /Unknown choice/]]) {
     const p = parseDefineForm(form(over)); assert.equal(p.ok, false, JSON.stringify(over)); assert.match(p.error, text)
   }
-  const p = parseDefineForm(form({ trade_types: ' Electrical , ,Scaffolding ', contact_email: 'OFFICE@X.TEST' }))
-  assert.deepEqual([p.input.tradeTypes, p.input.contactEmail], [['Electrical', 'Scaffolding'], 'office@x.test'])
+  const p = parseDefineForm(form({ custom_capabilities: 'Stonework\n scaffolding \r\n stonework\nHeritage  repair, and more', contact_email: 'OFFICE@X.TEST' }), [' Electrical ', 'Scaffolding', 'Electrical', 'Camp, catering and janitorial'])
+  // Ticked names first, then the extras typed; repeats (ignoring case) once; blanks gone.
+  assert.deepEqual([p.input.tradeTypes, p.input.contactEmail], [['Electrical', 'Scaffolding', 'Camp, catering and janitorial', 'Stonework', 'Heritage repair, and more'], 'office@x.test'])
+  assert.equal(parseDefineForm(form(), Array.from({ length: 61 }, (_, i) => `Thing ${i}`)).ok, false)
   // Linking to a company someone else defined needs no admin of ours.
   assert.ok(parseDefineForm({ legal_name: 'X', decision: 'link:cco_01HZZZZZZZZZZZZZZZZZZZZZZZ', admin_type: '' }).ok)
 })

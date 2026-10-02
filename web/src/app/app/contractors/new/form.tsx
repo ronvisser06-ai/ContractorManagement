@@ -4,6 +4,8 @@ import { useActionState, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { CapabilityPicker } from '@/components/capability-picker'
+import type { CatalogGroup } from '@/lib/companies/capabilities'
 import { defineCompanyAction, type FormState } from './actions'
 
 interface Member {
@@ -18,7 +20,7 @@ const ADMIN_TYPES = [
   { value: 'third_party', label: 'A third party acting for the company', hint: 'A consultant or agency person. Invited the same way, and recorded as a third party.' },
 ] as const
 
-export function NewCompanyForm({ members }: { members: Member[] }) {
+export function NewCompanyForm({ members, groups }: { members: Member[]; groups: CatalogGroup[] }) {
   const [state, action, pending] = useActionState<FormState, FormData>(defineCompanyAction, {})
   const v = state.values ?? {}
   const [type, setType] = useState<string>(v.admin_type ?? 'external')
@@ -77,9 +79,8 @@ export function NewCompanyForm({ members }: { members: Member[] }) {
           <Input id="contact_email" name="contact_email" type="email" defaultValue={v.contact_email ?? ''} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="trade_types">Trades</Label>
-          <Input id="trade_types" name="trade_types" placeholder="Electrical, Scaffolding" defaultValue={v.trade_types ?? ''} />
-          <p className="text-xs text-muted-foreground">Separate with commas.</p>
+          <p className="text-sm font-medium">What it does</p>
+          <CapabilityPicker groups={groups} selected={new Set(state.selected ?? [])} custom={v.custom_capabilities ?? ''} postsAs="label" />
         </div>
       </section>
 

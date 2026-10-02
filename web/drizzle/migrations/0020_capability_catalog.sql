@@ -7,7 +7,7 @@
 --   the whole list through set_company_capabilities(); there is no direct insert, update or delete. Readable by the company's
 --   own people and by the organizations it is actively linked to (who can then filter by it).
 -- * Free-text trade_types are copied in (a label that matches a catalog entry becomes that entry; the rest become custom
---   labels). The column stays until the screens stop using it (F2b), which then drops it.
+--   labels), and the column is then dropped: capabilities are the one place a company's trades live.
 
 CREATE TABLE capabilities (
   id         text PRIMARY KEY,
@@ -226,3 +226,6 @@ FROM contractor_companies c
 CROSS JOIN LATERAL unnest(c.trade_types) AS t(label)
 LEFT JOIN capabilities k ON capability_key(k.label) = capability_key(t.label) OR capability_key(k.code) = capability_key(t.label)
 WHERE capability_key(t.label) <> '' AND char_length(trim(t.label)) <= 80;
+
+-- Copied above, and nothing reads or writes it any more (define_contractor_company was redefined without it).
+ALTER TABLE contractor_companies DROP COLUMN trade_types;

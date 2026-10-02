@@ -248,7 +248,6 @@ export const invitationStatusEnum = pgEnum('invitation_status', [
 export const contractorCompanies = pgTable('contractor_companies', {
   id: text('id').primaryKey(),
   legalName: text('legal_name').notNull(),
-  tradeTypes: text('trade_types').array().notNull().default([]),
   contactName: text('contact_name'),
   contactEmail: citext('contact_email'),
   contactPhone: text('contact_phone'),

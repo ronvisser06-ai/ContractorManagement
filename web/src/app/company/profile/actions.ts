@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation'
 import { requireActiveCompany } from '@/lib/context/server'
 import { queueCompanyLinks } from '@/lib/relatrix/queue'
+import { readCapabilityForm } from '@/lib/companies/capabilities'
 
 export async function updateCompanyProfile(formData: FormData) {
   // Acts on the user's *active* company, with their role in that company (F0).
@@ -18,15 +19,6 @@ export async function updateCompanyProfile(formData: FormData) {
   const contactName = ((formData.get('contact_name') as string | null) ?? '').trim()
   const contactPhone = ((formData.get('contact_phone') as string | null) ?? '').trim()
 
-  // trade_types: comma-separated text → text[]
-  const tradeTypesRaw = ((formData.get('trade_types') as string | null) ?? '').trim()
-  const tradeTypes = tradeTypesRaw
-    ? tradeTypesRaw
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean)
-    : []
-
   // RLS ("contractor_companies: update if contractor_admin") enforces that only
   // a contractor_admin of this company_id may write.
   const { error } = await supabase
@@ -35,7 +27,6 @@ export async function updateCompanyProfile(formData: FormData) {
       legal_name: legalName,
       contact_name: contactName || null,
       contact_phone: contactPhone || null,
-      trade_types: tradeTypes,
       updated_at: new Date().toISOString(),
     })
     .eq('id', company.id)
@@ -43,6 +34,11 @@ export async function updateCompanyProfile(formData: FormData) {
   if (error) {
     redirect(`/company/profile?error=${encodeURIComponent(error.message)}`)
   }
+
+  // What the company does: the whole list, set in one go (the database checks who may, and what is allowed).
+  const { catalog, custom } = readCapabilityForm(formData)
+  const { error: capError } = await supabase.rpc('set_company_capabilities', { p_company: company.id, p_catalog: catalog, p_custom: custom })
+  if (capError) redirect(`/company/profile?error=${encodeURIComponent(capError.message)}`)
 
   // A renamed company or a new contact domain changes what Relatrix is told about every organization that uses it.
   await queueCompanyLinks(company.id)
