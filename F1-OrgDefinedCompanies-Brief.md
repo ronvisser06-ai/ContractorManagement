@@ -1,5 +1,7 @@
 # F1 — Org-Defined Contractor Companies + Nominated Admins (Plan-Mode Brief)
 
+> **Status: ✅ Shipped 2026-10-01** — Steps 1–5 done; Definition of Done met (end-to-end story 17/17, full suite 145/145); production migrations 0018–0020 applied. Details and follow-ups: BUILDLOG.md.
+
 > **Feature goal:** a client org **defines** a contractor company (name, trades, contacts, business number, website) and **nominates its admin** — company staff, the org's own staff (in-house), or a third-party administrator. If the company already exists on the platform, the org **finds it and requests a link** instead of creating a duplicate; the company's admin accepts or declines. Existing users (in-house staff, third-party admins already running another company) can accept an admin invite while signed in. After setup, the **company's own admins** manage its admins.
 >
 > **Builds on F0:** a person can now hold many org + company memberships and switch between them — F1 creates those memberships.

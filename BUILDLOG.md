@@ -1401,6 +1401,36 @@ Full end-to-end pipeline run on the real 10-slide Proton Safety Orientation deck
 
 ---
 
+### 2026-10-01 — F1 Step 5 — End-to-end story + ship check (F1 complete)
+
+**What I Built**:
+- `web/scripts/seed-f1-personas.mjs` — seed / `--cleanup` for the F1 cast on ConTrak Dev (refuses production via the guard): **Nora** (Client Admin, Northwind), **Ian** (foreman, Northwind), **Hank** (Client Admin, Harbor), **Tess** (third-party admin of Birch). Apex is not seeded — the story creates it. Shared password → git-ignored `web/.env.f1-personas.local`.
+
+**The Definition-of-Done story — through the real UI forms, as each person (HTTP, production build): 17/17 on the first run**
+1. Nora searches "Apex scaffolding" → not on the platform → creates Apex with details, nominating **Ian (Our staff)**; her list shows "Awaiting admin".
+2. Ian, already signed in, accepts → lands in Apex as Contractor Admin; his chooser shows Northwind (Site Foreman) + Apex; Nora sees Apex **Linked**.
+3. Hank's typo search finds Apex **by name only** (no contact / business number / website) → **Request link** → "Requested"; Hank cannot read Apex's profile.
+4. Ian accepts Harbor on **Clients** → Hank sees Apex Linked (with its contact).
+5. Ian invites **Tess (third party)** → Tess, signed in as Birch's admin, accepts → **runs Birch and Apex**; switches from the header.
+6. Ian invites Carl (company staff, brand-new) → Carl signs up via the invite → 3 admins → Ian removes Carl.
+7. At Birch, Tess is the only admin → "Step down" disabled, and forcing it is refused.
+- Browser (Ron signed in as Tess): chooser with both companies, switcher, Apex Clients (Harbor + Northwind Linked), Apex Admins (Ian · Our staff, Tess · Third-party).
+
+**Ship check (Jacques)**
+| Check | Result |
+|---|---|
+| Core feature works (Rule 20) | ✅ every DoD scenario above, plus Steps 2–4 checks |
+| Not overengineered (Rule 12) | ✅ no unused exports in new modules; ⚠️ `pending_link_requests` RPC (0018) is now unused by the app — superseded by `company_client_links` (0020); harmless and tested, drop in F8 |
+| Tested (Rule 7) | ✅ full suite **145/145** on ConTrak Dev (a first run hit a transient network outage — suites failed in setup within ms while the browser also timed out; clean rerun 145/145); tsc clean; lint = the 4 pre-existing warnings in `api/health/route.ts` |
+| Committed / live | ✅ all steps pushed and deployed; production migrations **0018, 0019, 0020** applied and verified; no new migration in Step 5 |
+| RLS DoD | ✅ "no client can attach itself to a company" + "pending/declined links expose nothing" covered by `company-definition` / `company-clients` tests and the attack script |
+
+**F1 follow-ups (logged, not blocking)**: verified sending domain in Resend so invites reach real people; F8 items — RLS helper functions callable with any user id, invitation tokens readable by all org/company members (check worker-invite path), drop unused `pending_link_requests`; pre-existing nits (`createSite` raw RLS message, app font variable, "Create Next App" title).
+
+**What's Next**: F2 — capability catalog + company capabilities (fresh conversation, Rule 18).
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

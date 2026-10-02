@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Approved 2026-09-30** — D1, D2, D3, D5 confirmed; D4, D6, D7 stay proposed until F4 / F7. F0 shipped (`F0-MultiMembership-Brief.md`). **F1 brief: `F1-OrgDefinedCompanies-Brief.md`** (decisions F1-1…F1-5 confirmed 2026-10-01) |
+| **Status** | **Approved 2026-09-30** — D1, D2, D3, D5 confirmed; D4, D6, D7 stay proposed until F4 / F7. F0 shipped (`F0-MultiMembership-Brief.md`). **F1 shipped 2026-10-01** (`F1-OrgDefinedCompanies-Brief.md`, decisions F1-1…F1-6) — closes **G1, G2, G3**. Next: F2 |
 | **Date** | 2026-09-30 |
 | **Scope** | Contractor companies, their admins, locations, capabilities, facility mapping, worker profiles, credentials, and orientation records |
 | **Supersedes on approval** | FunctionalOverview §3.2 ("lightweight CRM"), §9 (Certs Check exclusion, partially); ExecutionPlan sequencing |
