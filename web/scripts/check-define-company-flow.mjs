@@ -73,8 +73,10 @@ await check('a new company: created, its admin invited by email with the type, a
   const r = await defineCompany(deps(adminA, A), input())
   assert.equal(r.kind, 'created'); assert.equal(r.warning, null); assert.equal(r.invite, null)
   created = r.companyId
-  const [c] = await sql`select legal_name, trade_types, contact_phone, defined_by_org_id from contractor_companies where id = ${created}`
-  assert.deepEqual([c.legal_name, c.trade_types, c.defined_by_org_id], [`Apex ${tag} Electric Ltd`, ['Electrical', 'Scaffolding'], A.id])
+  const [c] = await sql`select legal_name, contact_phone, defined_by_org_id from contractor_companies where id = ${created}`
+  assert.deepEqual([c.legal_name, c.defined_by_org_id], [`Apex ${tag} Electric Ltd`, A.id])
+  // The trades typed on the form are the company's capabilities (migration 0020).
+  assert.deepEqual((await sql`select k.code from company_capabilities cc join capabilities k on k.id = cc.capability_id where cc.company_id = ${created} order by 1`).map((x) => x.code), ['electrical', 'scaffolding'])
   const [inv] = await sql`select admin_type, email, status, org_id from invitations where company_id = ${created}`
   assert.deepEqual([inv.admin_type, inv.email, inv.status, inv.org_id], ['external', `boss@apex-${tag}.test`, 'pending', A.id])
   assert.equal(mails.length, 1); assert.equal(mails[0].to, `boss@apex-${tag}.test`)

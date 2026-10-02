@@ -1384,6 +1384,20 @@ Nothing changed in this repository's code. Relatrix gained what S4 and S5 call: 
 
 ---
 
+### 2026-10-02 — M2.5 F2a — capability catalog (database)
+
+**What I Built** (migration `0020_capability_catalog.sql`; the screens are F2b and F2c):
+- `capabilities`: the platform-wide catalog (decision D2), 42 entries in six groups in this project's own wording (no proprietary classification), the same for every client. Everyone signed in reads it; nobody writes it through the app (the operator curates it in SQL); an entry is retired, never deleted.
+- `company_capabilities`: what a company holds: a catalog entry **or** a custom label (a check says exactly one), neither repeating (case and punctuation ignored). **No direct insert, update or delete for anyone**: `set_company_capabilities(company, catalog ids, custom labels)` is the only writer and replaces the whole set, callable by that company's admins only. A typed name that is a live catalog entry's name is stored as the entry; blank names are ignored; unknown, over-long or symbol-only names, retired entries newly chosen, and more than 60 are refused. Read by the company's own people and by organizations **actively** linked to it (an invited link sees nothing).
+- Existing free-text `trade_types` are copied in (a catalog name becomes the entry, the rest custom, duplicates once). The column is left in place until the screens stop using it (F2b drops it). `define_contractor_company` now stores the trades typed on the org's form as capabilities.
+- 13 SQL checks on the scratch Postgres with the real schema; 13 removals of a guard, each caught. Earlier checks that read `trade_types` now read capabilities.
+
+**Not verified**: not applied to production (0019 and 0020, in order); the copy of existing trades was run on constructed data, never on the real companies; the catalog list is a first draft for Ron to edit before go-live.
+
+**What's Next**: F2b: the company profile picks capabilities (grouped checklist plus custom entries), the org's add-company form uses the same picker, and `trade_types` is dropped. F2c: the client's Contractors page shows and filters by them.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

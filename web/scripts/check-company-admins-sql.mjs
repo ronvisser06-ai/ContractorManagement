@@ -95,7 +95,8 @@ await check('defining a company records who defined it and waits for an admin', 
   const c = (await tx`select * from contractor_companies where id = ${r.company_id}`)[0]
   assert.equal(c.legal_name, 'Apex Electric Ltd')
   assert.equal(c.defined_by_org_id, 'org_1')
-  assert.deepEqual(c.trade_types, ['Electrical'])
+  // Trades typed on the form are capabilities now (migration 0020): Electrical is a catalog entry.
+  assert.deepEqual((await tx`select k.code from company_capabilities cc join capabilities k on k.id = cc.capability_id where cc.company_id = ${r.company_id}`).map((x) => x.code), ['electrical'])
   assert.equal((await tx`select status from client_company_links where company_id = ${r.company_id} and org_id = 'org_1'`)[0].status, 'invited')
 })
 

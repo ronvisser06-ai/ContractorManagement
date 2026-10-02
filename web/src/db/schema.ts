@@ -289,6 +289,29 @@ export const companyMemberships = pgTable(
   (t) => [unique().on(t.userId, t.companyId)],
 )
 
+// Platform-wide capability catalog (migration 0020, decision D2): the same list for every client, curated in SQL by the
+// platform operator, read by everyone signed in. An entry is retired, never deleted.
+export const capabilities = pgTable('capabilities', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  label: text('label').notNull(),
+  category: text('category').notNull(),
+  retiredAt: timestamp('retired_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// What a contractor company holds: a catalog entry, or a custom label where none fits (exactly one, by a check). Written only
+// through set_company_capabilities(); read by the company's people and the organizations actively linked to it.
+export const companyCapabilities = pgTable('company_capabilities', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id')
+    .notNull()
+    .references(() => contractorCompanies.id, { onDelete: 'cascade' }),
+  capabilityId: text('capability_id').references(() => capabilities.id),
+  customLabel: text('custom_label'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 // Identity — verified email addresses for a user; supports one-person-many-emails
 export const userEmails = pgTable('user_emails', {
   id: text('id').primaryKey(),
