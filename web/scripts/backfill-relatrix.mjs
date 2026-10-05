@@ -7,6 +7,8 @@
 //   node --env-file=.env.local scripts/backfill-relatrix.mjs --status           how the queue stands, and what needs attention
 //   node --env-file=.env.local scripts/backfill-relatrix.mjs --links [--queue]  the same for client → contractor links (which also
 //                                                                               bring in the contractor companies, matched before created)
+//   node --env-file=.env.local scripts/backfill-relatrix.mjs --capabilities [--queue]   the same for what contractor companies do
+//                                                                               (proposed to Relatrix for a person to review)
 //
 //   --limit N        queue at most N organizations (a first small batch)
 //   --only id,id     only these organizations (with --links: these organizations' links, or link ids)
@@ -19,7 +21,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { applyPlan, buildPlan, describePlan, parseArgs } from '../src/lib/relatrix/backfill.ts'
 import { applyLinkPlan, buildLinkPlan, describeLinkPlan } from '../src/lib/relatrix/backfill-links.ts'
-import { databaseLinksSource, databaseSource, queueStatus } from '../src/lib/relatrix/backfill-source.ts'
+import { applyCapabilityPlan, buildCapabilityPlan, describeCapabilityPlan } from '../src/lib/relatrix/backfill-capabilities.ts'
+import { databaseCapabilitiesSource, databaseLinksSource, databaseSource, queueStatus } from '../src/lib/relatrix/backfill-source.ts'
 import { readConfig } from '../src/lib/relatrix/config.ts'
 import { databaseStore } from '../src/lib/relatrix/store.ts'
 
@@ -48,10 +51,16 @@ try {
     process.exit(0)
   }
 
-  const what = args.links ? 'links' : 'organizations'
-  const plan = args.links ? await buildLinkPlan(databaseLinksSource(supabase), { only: args.only, skip: args.skip }) : await buildPlan(databaseSource(supabase), { only: args.only, skip: args.skip })
+  const kinds = {
+    organizations: { build: () => buildPlan(databaseSource(supabase), { only: args.only, skip: args.skip }), describe: describePlan, apply: (p, st, n) => applyPlan(p, st, n) },
+    links: { build: () => buildLinkPlan(databaseLinksSource(supabase), { only: args.only, skip: args.skip }), describe: describeLinkPlan, apply: (p, st, n) => applyLinkPlan(p, st, n) },
+    companies: { build: () => buildCapabilityPlan(databaseCapabilitiesSource(supabase), { only: args.only, skip: args.skip }), describe: describeCapabilityPlan, apply: (p, st, n) => applyCapabilityPlan(p, st, n) },
+  }
+  const what = args.links ? 'links' : args.capabilities ? 'companies' : 'organizations'
+  const kind = kinds[what]
+  const plan = await kind.build()
   console.log(`Sync mode: ${mode}`)
-  for (const line of args.links ? describeLinkPlan(plan) : describePlan(plan)) console.log(line)
+  for (const line of kind.describe(plan)) console.log(line)
 
   if (args.command === 'plan') {
     console.log('\nNothing was written. Add --queue to queue these.')
@@ -62,7 +71,7 @@ try {
     console.error('\nRefusing: the sync is LIVE, so the drain would start sending these to Relatrix within a minute. Run it in dry-run first, then add --yes.')
     process.exit(1)
   }
-  const result = args.links ? await applyLinkPlan(plan, databaseStore(supabase), args.limit) : await applyPlan(plan, databaseStore(supabase), args.limit)
+  const result = await kind.apply(plan, databaseStore(supabase), args.limit)
   console.log(`\nQueued ${result.queued} ${what}; ${result.unchanged} were already queued as they stand.`)
   console.log(
     mode === 'off'

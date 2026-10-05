@@ -81,6 +81,26 @@ export interface RelationshipInput {
   started_on?: string
 }
 
+export interface Vocabulary {
+  id: string
+  key: string
+}
+
+export interface VocabularyTerm {
+  id: string
+  code: string
+  label: string
+  retired_at: string | null
+}
+
+/** One line of what a company can do, as Relatrix lists it: accepted, waiting for a person, or turned down. */
+export interface CompanyCapability {
+  id: string
+  status: 'accepted' | 'proposed' | 'rejected'
+  term_id: string | null
+  free_text: string | null
+}
+
 export interface CompanyInput {
   name: string
   domain?: string
@@ -145,6 +165,16 @@ export interface RelatrixClient {
   findRelationshipType(code: string): Promise<RelationshipType | null>
   /** Every relationship of one type that touches a company. */
   findRelationships(type: string, companyId: string): Promise<Relationship[]>
+  /** A workspace vocabulary by key; null if there is none. The shared ones are never returned. */
+  findVocabulary(key: string): Promise<Vocabulary | null>
+  createVocabulary(input: { key: string; name: string; description?: string }, idempotencyKey: string): Promise<Vocabulary>
+  /** Every term of a vocabulary, retired ones included. */
+  listVocabularyTerms(vocabularyId: string): Promise<VocabularyTerm[]>
+  createVocabularyTerm(vocabularyId: string, input: { code: string; label: string }, idempotencyKey: string): Promise<VocabularyTerm>
+  /** What a company can do: accepted, proposed and rejected, so a person's refusal can be respected. */
+  listCompanyCapabilities(companyId: string): Promise<CompanyCapability[]>
+  /** Proposes a capability for a person to decide in Review; never writes one. Answers with what is already there if it is. */
+  proposeCapability(companyId: string, input: { term_id: string } | { free_text: string }, quote: string, idempotencyKey: string): Promise<CompanyCapability>
   createRelationship(input: RelationshipInput, idempotencyKey: string): Promise<Relationship>
   /** Ends an edge (a date) or brings it back (null). Relatrix never deletes one through the API. */
   updateRelationship(id: string, patch: { ended_on: string | null }, idempotencyKey: string): Promise<Relationship>
@@ -245,6 +275,13 @@ export function createRelatrixClient(options: RelatrixClientOptions): RelatrixCl
     }
   }
 
+  const capability = (d: Record<string, unknown>): CompanyCapability => ({
+    id: d.id as string,
+    status: d.status === 'accepted' || d.status === 'rejected' ? d.status : 'proposed',
+    term_id: typeof d.term_id === 'string' ? d.term_id : null,
+    free_text: typeof d.free_text === 'string' ? d.free_text : null,
+  })
+
   const companyList = async (query: string): Promise<Company[]> => {
     const r = await request('GET', `/api/v1/companies?${query}&limit=20`)
     const data = asObject(r.body)?.data
@@ -316,6 +353,51 @@ export function createRelatrixClient(options: RelatrixClientOptions): RelatrixCl
 
     async updateRelationship(id, patch, idempotencyKey) {
       return relationship(asObject((await request('PATCH', `/api/v1/relationships/${encodeURIComponent(id)}`, { body: patch, idempotencyKey })).body)?.data)
+    },
+
+    async findVocabulary(key) {
+      const r = await request('GET', '/api/v1/vocabularies')
+      const data = asObject(r.body)?.data
+      if (!Array.isArray(data)) throw new RelatrixError('refused', 'That did not answer like Relatrix.', r.status, null, null)
+      const v = data.map(asObject).find((x): x is Record<string, unknown> => x !== null && x.key === key && x.shared === false)
+      return v && typeof v.id === 'string' ? { id: v.id, key } : null
+    },
+
+    async createVocabulary(input, idempotencyKey) {
+      const d = asObject(asObject((await request('POST', '/api/v1/vocabularies', { body: input, idempotencyKey })).body)?.data)
+      if (!d || typeof d.id !== 'string') throw new RelatrixError('refused', 'That did not answer like Relatrix.', null, null, null)
+      return { id: d.id, key: input.key }
+    },
+
+    async listVocabularyTerms(vocabularyId) {
+      const r = await request('GET', `/api/v1/vocabularies/${encodeURIComponent(vocabularyId)}/terms?retired=true`)
+      const data = asObject(r.body)?.data
+      if (!Array.isArray(data)) throw new RelatrixError('refused', 'That did not answer like Relatrix.', r.status, null, null)
+      return data.map(asObject).filter((t): t is Record<string, unknown> => t !== null && typeof t.id === 'string' && typeof t.code === 'string').map((t) => ({
+        id: t.id as string,
+        code: t.code as string,
+        label: typeof t.label === 'string' ? t.label : '',
+        retired_at: typeof t.retired_at === 'string' ? t.retired_at : null,
+      }))
+    },
+
+    async createVocabularyTerm(vocabularyId, input, idempotencyKey) {
+      const d = asObject(asObject((await request('POST', `/api/v1/vocabularies/${encodeURIComponent(vocabularyId)}/terms`, { body: input, idempotencyKey })).body)?.data)
+      if (!d || typeof d.id !== 'string') throw new RelatrixError('refused', 'That did not answer like Relatrix.', null, null, null)
+      return { id: d.id, code: input.code, label: input.label, retired_at: typeof d.retired_at === 'string' ? d.retired_at : null }
+    },
+
+    async listCompanyCapabilities(companyId) {
+      const r = await request('GET', `/api/v1/companies/${encodeURIComponent(companyId)}/capabilities`)
+      const data = asObject(r.body)?.data
+      if (!Array.isArray(data)) throw new RelatrixError('refused', 'That did not answer like Relatrix.', r.status, null, null)
+      return data.map(asObject).filter((c): c is Record<string, unknown> => c !== null && typeof c.id === 'string').map(capability)
+    },
+
+    async proposeCapability(companyId, input, quote, idempotencyKey) {
+      const d = asObject(asObject((await request('POST', `/api/v1/companies/${encodeURIComponent(companyId)}/capabilities`, { body: { ...input, quote }, idempotencyKey })).body)?.data)
+      if (!d || typeof d.id !== 'string') throw new RelatrixError('refused', 'That did not answer like Relatrix.', null, null, null)
+      return capability(d)
     },
 
     async findPipelineByName(name) {

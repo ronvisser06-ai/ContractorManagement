@@ -8,6 +8,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { inngest } from '@/lib/inngest/client'
 import { orgLifecyclePayload } from './lifecycle'
+import { capabilitiesPayload } from './capability-sync'
 import { linkPayload, type LinkStatus } from './links'
 import { databaseStore } from './store'
 
@@ -91,3 +92,34 @@ export const queueLink = (linkId: string) => queueLinks('id', linkId, `link ${li
 
 /** Every link of a company, after the company's own details changed or it gained an admin. Never throws. */
 export const queueCompanyLinks = (companyId: string) => queueLinks('company_id', companyId, `links of company ${companyId}`)
+
+// ── what a contractor company does ──────────────────────────────────────────────────────────────
+
+interface CapabilityRow {
+  company_id: string
+  custom_label: string | null
+  capabilities: { code: string; label: string } | null
+}
+
+/** A company's capabilities, after it set them or was defined with some. Never throws. */
+export async function queueCompanyCapabilities(companyId: string): Promise<boolean> {
+  try {
+    const supabase = createAdminClient()
+    const { data: co, error } = await supabase.from('contractor_companies').select('id, legal_name, contact_email').eq('id', companyId).maybeSingle()
+    if (error || !co) throw new Error(error?.message ?? 'company not found')
+    const { data: rows, error: capError } = await supabase.from('company_capabilities').select('company_id, custom_label, capabilities(code, label)').eq('company_id', companyId)
+    if (capError) throw new Error(capError.message)
+    const payload = capabilitiesPayload({
+      companyId,
+      legalName: co.legal_name as string,
+      contactEmail: (co.contact_email as string | null) ?? null,
+      held: ((rows ?? []) as unknown as CapabilityRow[]).map((r) => (r.capabilities ? { code: r.capabilities.code, label: r.capabilities.label } : { code: null, label: r.custom_label ?? '' })),
+    })
+    const result = await databaseStore(supabase).enqueue('contractor_company', companyId, 'company.capabilities', payload)
+    if (result === 'queued') await inngest.send({ name: 'crm/sync.requested', data: {} }).catch(() => undefined)
+    return true
+  } catch (e) {
+    console.error(`[relatrix] could not queue the capabilities of company ${companyId}:`, e instanceof Error ? e.message : 'unknown error')
+    return false
+  }
+}

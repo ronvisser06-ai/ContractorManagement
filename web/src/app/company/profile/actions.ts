@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { requireActiveCompany } from '@/lib/context/server'
-import { queueCompanyLinks } from '@/lib/relatrix/queue'
+import { queueCompanyCapabilities, queueCompanyLinks } from '@/lib/relatrix/queue'
 import { readCapabilityForm } from '@/lib/companies/capabilities'
 
 export async function updateCompanyProfile(formData: FormData) {
@@ -42,5 +42,6 @@ export async function updateCompanyProfile(formData: FormData) {
 
   // A renamed company or a new contact domain changes what Relatrix is told about every organization that uses it.
   await queueCompanyLinks(company.id)
+  await queueCompanyCapabilities(company.id)
   redirect('/company/profile?saved=1')
 }

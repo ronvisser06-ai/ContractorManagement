@@ -1,6 +1,7 @@
 // What each kind of sync does against Relatrix. One handler per `op`; the engine (sync.ts) owns retries and
 // outcomes, so a handler only does the work and throws RelatrixError or InvalidPayload.
 
+import { createHash } from 'node:crypto'
 import { CONTRAK_TAG, CONTRAK_SOURCE } from './constants.ts'
 import { RelatrixError, type Company, type RelatrixClient } from './client.ts'
 import { InvalidPayload, type Handler } from './sync.ts'
@@ -288,4 +289,90 @@ export const linkUses: Handler = {
   },
 }
 
-export const handlers: Record<string, Handler> = { 'company.upsert': companyUpsert, 'org.customer': orgCustomer, 'link.uses': linkUses }
+// ── what a contractor company does ────────────────────────────────────────────────────────────────
+
+/** The Relatrix vocabulary ConTrak owns: its capability catalog, one term per entry, made on first use. */
+export const CAPABILITY_VOCABULARY = { key: 'contrak-capabilities', name: 'ConTrak capabilities', description: 'The capability catalog contractors choose from in ConTrak.' }
+
+export interface CapabilitiesPayload {
+  contrak_company_id: string
+  name: string
+  domain?: string
+  capabilities: { code?: string; label: string }[]
+}
+
+export function parseCapabilities(payload: unknown): CapabilitiesPayload {
+  const p = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
+  if (!p) throw new InvalidPayload('The payload is not an object.')
+  const text = (v: unknown, max: number) => (typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null)
+  const id = text(p.contrak_company_id, 100)
+  const name = text(p.name, 190)
+  if (!id) throw new InvalidPayload('contrak_company_id is required.')
+  if (!name) throw new InvalidPayload('name is required and at most 190 characters.')
+  const out: CapabilitiesPayload = { contrak_company_id: id, name, capabilities: [] }
+  if (p.domain !== undefined) {
+    const d = text(p.domain, 253)
+    if (!d) throw new InvalidPayload('domain must be text of at most 253 characters.')
+    out.domain = d
+  }
+  if (!Array.isArray(p.capabilities) || p.capabilities.length > 60) throw new InvalidPayload('capabilities must be a list of at most 60.')
+  for (const c of p.capabilities) {
+    const o = c && typeof c === 'object' && !Array.isArray(c) ? (c as Record<string, unknown>) : null
+    const label = o && text(o.label, 190)
+    if (!o || !label) throw new InvalidPayload('Every capability needs a label of at most 190 characters.')
+    if (o.code !== undefined) {
+      const code = text(o.code, 80)
+      if (!code || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(code)) throw new InvalidPayload('A capability code is lower-case words joined by hyphens.')
+      out.capabilities.push({ code, label })
+    } else out.capabilities.push({ label })
+  }
+  return out
+}
+
+/**
+ * Proposes what a company does to Relatrix, for a person to decide in Review; it never writes a capability. The company
+ * is found or made the way a contractor is for a link (id, domain, name), a catalog entry is a term of ConTrak's own
+ * vocabulary (made when first needed), and an entry the company chose that Relatrix already holds, has waiting, or a person
+ * turned down is left alone: a refusal is not asked again. A term Ron retired is skipped, not an error.
+ */
+export const companyCapabilities: Handler = {
+  describe(payload) {
+    const p = parseCapabilities(payload)
+    return `Would propose ${p.capabilities.length} capabilit${p.capabilities.length === 1 ? 'y' : 'ies'} for “${p.name}” (ConTrak ${p.contrak_company_id}) in Relatrix for a person to review, as terms of the “${CAPABILITY_VOCABULARY.name}” vocabulary or as free text; nothing already there, waiting or turned down is sent again.`
+  },
+
+  async run(payload, { client, idempotencyKey }) {
+    const p = parseCapabilities(payload)
+    const company = await matchOrCreateCompany(client, { id: p.contrak_company_id, name: p.name, domain: p.domain }, `${idempotencyKey}-co`)
+    if (p.capabilities.length === 0) return { remoteId: company.id }
+
+    const termByCode = new Map<string, { id: string; retired: boolean }>()
+    if (p.capabilities.some((c) => c.code)) {
+      const vocabulary = (await client.findVocabulary(CAPABILITY_VOCABULARY.key)) ?? (await client.createVocabulary(CAPABILITY_VOCABULARY, `${idempotencyKey}-vocab`))
+      for (const t of await client.listVocabularyTerms(vocabulary.id)) termByCode.set(t.code, { id: t.id, retired: t.retired_at !== null })
+      for (const c of p.capabilities) {
+        if (c.code && !termByCode.has(c.code)) {
+          const made = await client.createVocabularyTerm(vocabulary.id, { code: c.code, label: c.label }, `${idempotencyKey}-term-${c.code}`)
+          termByCode.set(c.code, { id: made.id, retired: false })
+        }
+      }
+    }
+
+    const there = await client.listCompanyCapabilities(company.id)
+    for (const c of p.capabilities) {
+      const term = c.code ? termByCode.get(c.code)! : null
+      if (term?.retired) continue
+      const known = term ? there.some((t) => t.term_id === term.id) : there.some((t) => t.free_text?.toLowerCase() === c.label.toLowerCase())
+      if (known) continue
+      await client.proposeCapability(
+        company.id,
+        term ? { term_id: term.id } : { free_text: c.label },
+        'Chosen by the company in ConTrak.',
+        `${idempotencyKey}-cap-${c.code ?? createHash('sha256').update(c.label.toLowerCase()).digest('hex').slice(0, 12)}`,
+      )
+    }
+    return { remoteId: company.id }
+  },
+}
+
+export const handlers: Record<string, Handler> = { 'company.upsert': companyUpsert, 'org.customer': orgCustomer, 'link.uses': linkUses, 'company.capabilities': companyCapabilities }

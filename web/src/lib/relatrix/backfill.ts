@@ -150,6 +150,8 @@ export interface Args {
   command: 'plan' | 'queue' | 'status'
   /** Backfill client → contractor links instead of organizations. */
   links: boolean
+  /** Backfill what companies do instead (proposed capabilities). */
+  capabilities: boolean
   limit: number
   only: string[]
   skip: string[]
@@ -157,13 +159,14 @@ export interface Args {
 }
 
 export function parseArgs(argv: string[]): Args | { error: string } {
-  const args: Args = { command: 'plan', links: false, limit: Infinity, only: [], skip: [], yes: false }
+  const args: Args = { command: 'plan', links: false, capabilities: false, limit: Infinity, only: [], skip: [], yes: false }
   const list = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!
     if (a === '--queue') args.command = 'queue'
     else if (a === '--status') args.command = 'status'
     else if (a === '--links') args.links = true
+    else if (a === '--capabilities') args.capabilities = true
     else if (a === '--yes') args.yes = true
     else if (a === '--limit' || a === '--only' || a === '--skip') {
       const v = argv[++i]
@@ -174,7 +177,8 @@ export function parseArgs(argv: string[]): Args | { error: string } {
         args.limit = n
       } else if (a === '--only') args.only = list(v)
       else args.skip = list(v)
-    } else return { error: `Unknown option ${a}. Use --links, --queue, --status, --limit N, --only ids, --skip ids, --yes.` }
+    } else return { error: `Unknown option ${a}. Use --links, --capabilities, --queue, --status, --limit N, --only ids, --skip ids, --yes.` }
   }
+  if (args.links && args.capabilities) return { error: 'Choose --links or --capabilities, not both.' }
   return args
 }

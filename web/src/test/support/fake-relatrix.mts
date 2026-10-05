@@ -66,6 +66,30 @@ export interface FakeRelationship {
   ended_on: string | null
 }
 
+export interface FakeVocabulary {
+  id: string
+  key: string
+  name: string
+  shared: boolean
+}
+
+export interface FakeTerm {
+  id: string
+  vocabulary_id: string
+  code: string
+  label: string
+  retired_at: string | null
+}
+
+export interface FakeCapability {
+  id: string
+  company_id: string
+  status: 'accepted' | 'proposed' | 'rejected'
+  term_id: string | null
+  free_text: string | null
+  quote: string | null
+}
+
 export interface RecordedRequest {
   method: string
   url: string
@@ -83,6 +107,9 @@ export interface FakeRelatrix {
   activities: FakeActivity[]
   types: FakeType[]
   relationships: Map<string, FakeRelationship>
+  vocabularies: FakeVocabulary[]
+  terms: FakeTerm[]
+  capabilities: FakeCapability[]
   /** The relationship type Ron creates by hand: "Uses contractor". */
   addUsesType(over?: Partial<FakeType>): FakeType
   /** Every stage move Relatrix was asked for, in order. */
@@ -114,6 +141,9 @@ export async function startFakeRelatrix(): Promise<FakeRelatrix> {
   const activities: FakeActivity[] = []
   const types: FakeType[] = []
   const relationships = new Map<string, FakeRelationship>()
+  const vocabularies: FakeVocabulary[] = []
+  const terms: FakeTerm[] = []
+  const capabilities: FakeCapability[] = []
   const moves: { deal: string; stage: string }[] = []
   const replays = new Map<string, { status: number; body: unknown; hash: string }>()
   const requests: RecordedRequest[] = []
@@ -206,6 +236,48 @@ export async function startFakeRelatrix(): Promise<FakeRelatrix> {
       })
     }
 
+    // Vocabularies, terms and capabilities, as Relatrix's capabilities scope answers them (RelatrixCRM BUILD.md §6.5).
+    if (url.pathname === '/api/v1/vocabularies' && req.method === 'GET') return send(200, { data: [{ id: 'shared-1', key: 'construction-services', name: 'Services', shared: true }, ...vocabularies] })
+    if (url.pathname === '/api/v1/vocabularies' && req.method === 'POST') {
+      return replayable(() => {
+        if (vocabularies.some((v) => v.key === body?.key)) return { status: 409, body: { error: { code: 'conflict', message: 'That conflicts with a record that already exists.' } } }
+        n += 1
+        const v: FakeVocabulary = { id: `00000000-0000-4000-e000-${String(n).padStart(12, '0')}`, key: String(body?.key), name: String(body?.name), shared: false }
+        vocabularies.push(v)
+        return { status: 201, body: { data: v } }
+      })
+    }
+    const vTerms = /^\/api\/v1\/vocabularies\/([^/]+)\/terms$/.exec(url.pathname)
+    if (vTerms && req.method === 'GET') return send(200, { data: terms.filter((t) => t.vocabulary_id === vTerms[1] && (url.searchParams.get('retired') === 'true' || !t.retired_at)) })
+    if (vTerms && req.method === 'POST') {
+      return replayable(() => {
+        if (!vocabularies.some((v) => v.id === vTerms[1])) return { status: 404, body: { error: { code: 'not_found', message: 'No such vocabulary.' } } }
+        if (terms.some((t) => t.vocabulary_id === vTerms[1] && t.code === body?.code)) return { status: 409, body: { error: { code: 'conflict', message: 'That conflicts with a record that already exists.' } } }
+        n += 1
+        const t: FakeTerm = { id: `00000000-0000-4000-e100-${String(n).padStart(12, '0')}`, vocabulary_id: vTerms[1]!, code: String(body?.code), label: String(body?.label), retired_at: null }
+        terms.push(t)
+        return { status: 201, body: { data: t } }
+      })
+    }
+    const caps = /^\/api\/v1\/companies\/([^/]+)\/capabilities$/.exec(url.pathname)
+    if (caps && req.method === 'GET') return send(200, { data: capabilities.filter((c) => c.company_id === caps[1]) })
+    if (caps && req.method === 'POST') {
+      return replayable(() => {
+        const termId = (body?.term_id as string | undefined) ?? null
+        const text = (body?.free_text as string | undefined) ?? null
+        if ((termId === null) === (text === null)) return { status: 422, body: { error: { code: 'invalid_request', message: 'Send either “term_id” or “free_text”.' } } }
+        if (termId && !terms.some((t) => t.id === termId)) return { status: 422, body: { error: { code: 'invalid_request', message: 'No such term in this workspace or the shared vocabularies.' } } }
+        if (termId && terms.find((t) => t.id === termId)!.retired_at) return { status: 422, body: { error: { code: 'invalid_request', message: 'That term is retired.' } } }
+        // What is already there or waiting answers 200 and writes nothing; a rejected one does not count.
+        const same = capabilities.find((c) => c.company_id === caps[1] && c.status !== 'rejected' && (termId ? c.term_id === termId : c.free_text?.toLowerCase() === text!.toLowerCase()))
+        if (same) return { status: 200, body: { data: same } }
+        n += 1
+        const c: FakeCapability = { id: `00000000-0000-4000-e200-${String(n).padStart(12, '0')}`, company_id: caps[1]!, status: 'proposed', term_id: termId, free_text: text, quote: (body?.quote as string | undefined) ?? null }
+        capabilities.push(c)
+        return { status: 201, body: { data: c } }
+      })
+    }
+
     if (url.pathname === '/api/v1/relationship-types' && req.method === 'GET') return send(200, { data: types })
 
     if (url.pathname === '/api/v1/relationships' && req.method === 'GET') {
@@ -294,6 +366,9 @@ export async function startFakeRelatrix(): Promise<FakeRelatrix> {
     activities,
     types,
     relationships,
+    vocabularies,
+    terms,
+    capabilities,
     addUsesType(over = {}) {
       const t: FakeType = { id: `00000000-0000-4000-d000-${String(types.length + 1).padStart(12, '0')}`, code: 'uses-contractor', label: 'Uses contractor', from_kind: 'company', to_kind: 'company', retired_at: null, ...over }
       types.push(t)
@@ -323,6 +398,9 @@ export async function startFakeRelatrix(): Promise<FakeRelatrix> {
       activities.length = 0
       types.length = 0
       relationships.clear()
+      vocabularies.length = 0
+      terms.length = 0
+      capabilities.length = 0
       moves.length = 0
       replays.clear()
       requests.length = 0

@@ -1424,6 +1424,20 @@ Nothing changed in this repository's code. Relatrix gained what S4 and S5 call: 
 
 ---
 
+### 2026-10-05 — Relatrix integration S5 — capabilities proposed for review
+
+**What I Built** (still off by default): a `company.capabilities` sync. A contractor's capability choices reach Relatrix as **proposals for a person to accept or reject in Review**, through the S3 endpoints; nothing is written to a company. Catalog entries become terms (code, label) of a vocabulary ConTrak creates for itself on first use (`contrak-capabilities`); capabilities the company typed go as free text; each carries the quote "Chosen by the company in ConTrak." The company is found or made the S4 way. Only what is **new** is proposed: what Relatrix already holds, has waiting, or **a person turned down** is skipped (a refusal sticks, in any letter case), and a term Ron retired is skipped without failing the rest. `capability-sync.ts` builds the payload (name, the domain of the work address, capabilities in a fixed order; never an address or a person); `client.ts` gained vocabulary, term and capability calls.
+- Hooks: saving the company profile, and an org defining a company (not linking to one). Backfill: `scripts/backfill-relatrix.mjs --capabilities` (plan, `--queue`, `--limit`, `--only`, `--skip`; not with `--links`), `lib/relatrix/backfill-capabilities.ts`.
+- Checked: 12 sync tests and 6 backfill tests against the extended fake (vocabularies, terms, proposals with the real dedupe rule); 14 mutations of the handler and payload, 11 caught at once and 3 survivors turned into stronger tests (a rejected term, a rejected text in other letters, the payload order), then caught. The CLI ran on the scratch database through PostgREST: plan, `--queue --limit 2`, the rest, an unchanged plan, live refused without `--yes`, and `--links --capabilities` refused. 130 relatrix and capability tests pass.
+
+**Not verified**: nothing talked to a real Relatrix (the fake follows the S3 endpoints' tests, not the live ones); `queueCompanyCapabilities` itself was not run end to end (it needs Next's runtime; its select shape matches the backfill source, which was); removing a capability in ConTrak retracts nothing in Relatrix.
+
+**To turn it on (Ron)**: add `capabilities:read capabilities:write` to the ConTrak key (RelatrixCRM `docs/go-live.md` §7c), then run the capabilities backfill.
+
+**What's Next**: the integration's planned slices are done. What remains is yours to run: apply ConTrak migrations 0018 to 0020 and Relatrix's, create the "Uses contractor" type, the go-live checklist, then the real-data checks.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

@@ -101,7 +101,7 @@ test('the report names both sides and the domain, counts by status, and lists wh
 })
 
 test('--links is a command line option, and the others still parse', () => {
-  assert.deepEqual(parseArgs(['--links', '--queue', '--only', 'org_a']), { command: 'queue', links: true, limit: Infinity, only: ['org_a'], skip: [], yes: false })
+  assert.deepEqual(parseArgs(['--links', '--queue', '--only', 'org_a']), { command: 'queue', links: true, capabilities: false, limit: Infinity, only: ['org_a'], skip: [], yes: false })
   assert.equal((parseArgs(['--queue']) as { links: boolean }).links, false)
 })
 

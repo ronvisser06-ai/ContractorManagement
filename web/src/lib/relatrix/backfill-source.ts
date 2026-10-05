@@ -3,6 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DatedRow, FactsSource } from './backfill.ts'
 import type { LinkRow, LinksSource } from './backfill-links.ts'
+import type { CapabilitiesSource } from './backfill-capabilities.ts'
 
 const PAGE = 1000
 
@@ -95,6 +96,49 @@ export function databaseLinksSource(supabase: SupabaseClient): LinksSource {
       const m = new Map<string, string>()
       for (let from = 0; ; from += PAGE) {
         const { data, error } = await supabase.from('crm_sync').select('entity_id, payload_hash').eq('entity', 'client_company_link').eq('op', 'link.uses').order('entity_id', { ascending: true }).range(from, from + PAGE - 1)
+        if (error) throw new Error(`Could not read the sync queue: ${error.message}`)
+        for (const r of (data ?? []) as { entity_id: string; payload_hash: string }[]) m.set(r.entity_id, r.payload_hash)
+        if (!data || data.length < PAGE) break
+      }
+      return m
+    },
+  }
+}
+
+/** Every company that holds a capability, with the catalog entries and its own words. Read-only. */
+export function databaseCapabilitiesSource(supabase: SupabaseClient): CapabilitiesSource {
+  return {
+    async companies() {
+      const held = new Map<string, { code: string | null; label: string }[]>()
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from('company_capabilities')
+          .select('id, company_id, custom_label, capabilities(code, label)')
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1)
+        if (error) throw new Error(`Could not read company capabilities: ${error.message}`)
+        for (const r of (data ?? []) as unknown as { company_id: string; custom_label: string | null; capabilities: { code: string; label: string } | null }[]) {
+          const list = held.get(r.company_id) ?? []
+          list.push(r.capabilities ? { code: r.capabilities.code, label: r.capabilities.label } : { code: null, label: r.custom_label ?? '' })
+          held.set(r.company_id, list)
+        }
+        if (!data || data.length < PAGE) break
+      }
+      const out: { companyId: string; legalName: string; contactEmail: string | null; held: { code: string | null; label: string }[]; createdAt: string }[] = []
+      const ids = [...held.keys()]
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data, error } = await supabase.from('contractor_companies').select('id, legal_name, contact_email, created_at').in('id', ids.slice(i, i + 200))
+        if (error) throw new Error(`Could not read companies: ${error.message}`)
+        for (const c of (data ?? []) as { id: string; legal_name: string; contact_email: string | null; created_at: string }[]) {
+          out.push({ companyId: c.id, legalName: c.legal_name, contactEmail: c.contact_email, held: held.get(c.id) ?? [], createdAt: c.created_at })
+        }
+      }
+      return out
+    },
+    async queued() {
+      const m = new Map<string, string>()
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase.from('crm_sync').select('entity_id, payload_hash').eq('entity', 'contractor_company').eq('op', 'company.capabilities').order('entity_id', { ascending: true }).range(from, from + PAGE - 1)
         if (error) throw new Error(`Could not read the sync queue: ${error.message}`)
         for (const r of (data ?? []) as { entity_id: string; payload_hash: string }[]) m.set(r.entity_id, r.payload_hash)
         if (!data || data.length < PAGE) break

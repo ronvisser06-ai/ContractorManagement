@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email/send'
 import { requireActiveOrg } from '@/lib/context/server'
-import { queueCompanyLinks, queueOrgLifecycle } from '@/lib/relatrix/queue'
+import { queueCompanyCapabilities, queueCompanyLinks, queueOrgLifecycle } from '@/lib/relatrix/queue'
 import { defineCompany, parseDefineForm, type Match } from '@/lib/companies/define'
 
 export interface FormState {
@@ -47,6 +47,8 @@ export async function defineCompanyAction(_prev: FormState, formData: FormData):
 
   await queueOrgLifecycle(org.id)
   await queueCompanyLinks(result.companyId)
+  // A company this org just defined starts with the capabilities typed on the form; a company it only linked to is not its to describe.
+  if (result.kind === 'created') await queueCompanyCapabilities(result.companyId)
   if (result.kind === 'linked') redirect(`/app/contractors?linked=${result.notified > 0 ? 'told' : 'asked'}`)
   if (result.warning) redirect(`/app/contractors?error=${encodeURIComponent(result.warning)}`)
   if (result.invite) redirect(`/app/contractors?invite_token=${result.invite.token}`)
