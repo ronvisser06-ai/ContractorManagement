@@ -156,6 +156,10 @@ await check('the company’s people and organizations actively linked to it read
   assert.equal(await see(w.worker), 2, 'its own worker')
   assert.equal(await see(w.orgAdmin), 2, 'an organization with an active link')
   assert.equal(await see(w.otherOrg), 0, 'an organization whose link is only invited')
+  // The org that defined the company sees what it does even while its own link is only invited.
+  await tx`update client_company_links set status = 'invited' where id = 'l1'`
+  assert.equal(await see(w.orgAdmin), 2, 'the defining organization, link not yet active')
+  await tx`update client_company_links set status = 'active' where id = 'l1'`
   assert.equal(await see(w.outsider), 0)
   await tx`update client_company_links set status = 'active' where id = 'l2'`
   assert.equal(await see(w.otherOrg), 2)

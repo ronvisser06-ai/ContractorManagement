@@ -1412,6 +1412,18 @@ Nothing changed in this repository's code. Relatrix gained what S4 and S5 call: 
 
 ---
 
+### 2026-10-05 — M2.5 F2c — the client sees and filters by what contractors do
+
+**What I Built**: on the client's **Contractors** page each linked company shows what it does (catalog entries first, then its own words), and a "Filter by capability" select (a plain GET form, no script) offers only the catalog capabilities some linked company holds, with counts; the heading and the matching chips follow the choice, "Clear" and "Show all" undo it, and an unknown code is ignored. `lib/companies/capabilities.ts` gained `heldByCompany`, `filterOptions` and `holding` (3 more unit tests, 7 in the file).
+- **A gap F1b left, found by looking at the page:** a company an org had just defined showed as "—" until its admin accepted, because a company's name was readable only through an *active* link. Migration 0019 now lets an org read the companies it defined (`org_defined_company_ids`, a new policy), and 0020 lets it read their capabilities. Two new checks (the SQL check is now 21, the capability check still 13 with a stronger case); the policy and both reads were each removed and caught.
+- Driven in a browser at phone width as a client admin: chips on three active companies, the filter options with counts, Welding narrowing the list and the heading, an unknown code ignored, Trucking, Clear, and a pending company showing its name, "Invited" and its capability. No console errors.
+
+**Not verified**: not applied to production (0019 and 0020, in order); the page was run against a handful of seeded companies, not a long list; capabilities do not reach Relatrix yet.
+
+**F2 is complete** (a, b, c). **What's Next**: S5, sending the catalog to Relatrix as a vocabulary and each company's capabilities as proposals for Review (the Relatrix side exists: S3). It needs `capabilities:read capabilities:write` on the ConTrak key.
+
+---
+
 ## Track Progress
 
 Use this log for continuity (paste last "What's Next" to start the next session), accountability (features shipped vs. stalled), and learning (what broke + fix).

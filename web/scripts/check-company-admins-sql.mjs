@@ -312,6 +312,19 @@ await check('anon cannot call the company-side functions, and the helper is not 
   await rejects(tx, () => as(tx, w.adminA, () => tx`select assert_company_admin('x')`), /permission denied/)
 })
 
+await check('an org sees the companies it defined, even before an admin has accepted, and no other org does', async (tx, w) => {
+  const [r] = await as(tx, w.adminA, () => define(tx, 'org_1', 'Apex'))
+  const seen = (u) => as(tx, u, async () => (await tx`select legal_name from contractor_companies where id = ${r.company_id}`).map((x) => x.legal_name))
+  assert.deepEqual(await seen(w.adminA), ['Apex'], 'the defining org’s admin')
+  assert.deepEqual(await seen(w.staffA), ['Apex'], 'and any of its members')
+  assert.deepEqual(await seen(w.adminB), [], 'another org')
+  assert.deepEqual(await seen(w.outsider), [])
+  // Linking to someone else's company shows its name only once the link is active, as before.
+  const [theirs] = await as(tx, w.adminB, () => define(tx, 'org_2', 'Birch Civil'))
+  await as(tx, w.adminA, () => define(tx, 'org_1', 'Birch Civil', { linkExisting: theirs.company_id }))
+  assert.deepEqual(await as(tx, w.adminA, async () => (await tx`select legal_name from contractor_companies where id = ${theirs.company_id}`).length), 0)
+})
+
 const failed = results.filter(([ok]) => !ok)
 for (const [ok, name] of results) console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`)
 console.log(`\n${results.length - failed.length}/${results.length} passed`)

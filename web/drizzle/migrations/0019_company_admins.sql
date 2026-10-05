@@ -28,6 +28,17 @@ UPDATE invitations SET admin_type = 'external' WHERE type = 'company';
 
 ALTER TABLE contractor_companies ADD COLUMN defined_by_org_id text REFERENCES organizations(id);
 
+-- ── an org sees the companies it defined, before anyone has accepted ─────────
+-- A company's name is otherwise visible to an org only through an ACTIVE link, which waits for the company's admin. The org that
+-- typed the company in must not see a blank where it just made one.
+CREATE OR REPLACE FUNCTION org_defined_company_ids(uid uuid)
+RETURNS TABLE (company_id text)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT c.id FROM contractor_companies c WHERE c.defined_by_org_id IN (SELECT org_id FROM user_org_ids(uid))
+$$;
+CREATE POLICY "contractor_companies: read if defined by my org" ON contractor_companies FOR SELECT TO authenticated
+  USING (id IN (SELECT company_id FROM org_defined_company_ids(auth.uid())));
+
 -- ── matching ──────────────────────────────────────────────────────────────────
 -- "Acme Construction Ltd." and "ACME Construction, Ltd" are one company. Lower case, "&" as "and", punctuation and
 -- spaces gone, then ONE trailing legal suffix off.

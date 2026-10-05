@@ -29,3 +29,35 @@ test('a form hands over the ticked entries once each, and the extras typed', () 
   assert.deepEqual(readCapabilityForm(f), { catalog: ['cap_a', 'cap_b'], custom: ['One', 'Two'] })
   assert.deepEqual(readCapabilityForm(new FormData()), { catalog: [], custom: [] })
 })
+
+import { filterOptions, heldByCompany, holding } from '../lib/companies/capabilities.ts'
+
+const rows = [
+  { company_id: 'c1', custom_label: null, capabilities: { code: 'welding', label: 'Welding and fabrication' } },
+  { company_id: 'c1', custom_label: 'Stonework', capabilities: null },
+  { company_id: 'c1', custom_label: null, capabilities: { code: 'electrical', label: 'Electrical' } },
+  { company_id: 'c2', custom_label: null, capabilities: { code: 'electrical', label: 'Electrical' } },
+  { company_id: 'c3', custom_label: 'Ice roads', capabilities: null },
+  { company_id: 'c4', custom_label: null, capabilities: null },
+]
+
+test('each company’s capabilities: catalog entries first, then its own words, each by label; an empty row is nothing', () => {
+  const held = heldByCompany(rows)
+  assert.deepEqual(held.get('c1')!.map((h) => h.label), ['Electrical', 'Welding and fabrication', 'Stonework'])
+  assert.deepEqual(held.get('c3'), [{ code: null, label: 'Ice roads' }])
+  assert.equal(held.has('c4'), false)
+})
+
+test('the filter offers only catalog capabilities some company holds, with counts, and never a company’s own words', () => {
+  assert.deepEqual(filterOptions(heldByCompany(rows)), [{ code: 'electrical', label: 'Electrical', count: 2 }, { code: 'welding', label: 'Welding and fabrication', count: 1 }])
+})
+
+test('filtering keeps the companies that hold the capability, none held keeps none, and no code keeps all', () => {
+  const held = heldByCompany(rows)
+  const links = ['c1', 'c2', 'c3', 'c4'].map((company_id) => ({ company_id }))
+  assert.deepEqual(holding(links, held, 'electrical').map((l) => l.company_id), ['c1', 'c2'])
+  assert.deepEqual(holding(links, held, 'welding').map((l) => l.company_id), ['c1'])
+  assert.deepEqual(holding(links, held, 'unknown'), [])
+  assert.equal(holding(links, held, null).length, 4)
+  assert.equal(holding(links, held, '').length, 4)
+})

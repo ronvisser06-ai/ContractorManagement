@@ -39,7 +39,8 @@ GRANT SELECT ON capabilities, company_capabilities TO authenticated;
 CREATE POLICY "capabilities: read if signed in" ON capabilities FOR SELECT TO authenticated USING (true);
 CREATE POLICY "company_capabilities: read if member or linked" ON company_capabilities FOR SELECT TO authenticated
   USING (company_id IN (SELECT company_id FROM user_company_ids(auth.uid()))
-      OR company_id IN (SELECT company_id FROM org_linked_company_ids(auth.uid())));
+      OR company_id IN (SELECT company_id FROM org_linked_company_ids(auth.uid()))
+      OR company_id IN (SELECT company_id FROM org_defined_company_ids(auth.uid())));
 
 -- ── matching a typed label to the catalog ─────────────────────────────────────
 -- "Electrical", "electrical " and "ELECTRICAL" are one thing; punctuation and spacing do not matter.
